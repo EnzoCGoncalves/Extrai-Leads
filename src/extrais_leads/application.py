@@ -14,6 +14,7 @@ from extrais_leads.core.logging import configure_logging, log_event
 from extrais_leads.db import Database
 from extrais_leads.providers import OpenStreetMapProvider, SearchProvider, TavilyProvider
 from extrais_leads.services.enrichment import WebsiteEnrichmentCoordinator
+from extrais_leads.services.excel_export import ExcelExportService
 from extrais_leads.services.qualification import (
     GeminiQualificationClient,
     QualificationService,
@@ -30,6 +31,7 @@ def create_app(
     providers: list[SearchProvider] | None = None,
     website_enricher: WebsiteEnricher | None = None,
     qualification_service: QualificationService | None = None,
+    excel_export_service: ExcelExportService | None = None,
 ) -> FastAPI:
     """Build an isolated application instance without opening external resources."""
 
@@ -50,6 +52,9 @@ def create_app(
         website_enricher=website_enricher,
     )
     qualification = qualification_service or _build_qualification(resolved_settings, cache)
+    exporter = excel_export_service or ExcelExportService(
+        batch_size=resolved_settings.excel_export_batch_size
+    )
     search_runner = SearchRunner(
         database,
         cache,
@@ -67,6 +72,7 @@ def create_app(
         app.state.cache = cache
         app.state.search_runner = search_runner
         app.state.search_task_manager = task_manager
+        app.state.excel_export_service = exporter
         await database.initialize(create_schema=resolved_settings.database_auto_create)
         await search_runner.recover_interrupted()
         log_event(logger, "APP", "Aplicação iniciada", environment=resolved_settings.app_env)
@@ -94,6 +100,7 @@ def create_app(
     app.state.cache = cache
     app.state.search_runner = search_runner
     app.state.search_task_manager = task_manager
+    app.state.excel_export_service = exporter
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,

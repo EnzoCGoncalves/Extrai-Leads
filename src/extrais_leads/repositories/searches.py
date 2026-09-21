@@ -32,6 +32,24 @@ class SearchRepository:
         total = await session.scalar(
             select(func.count(SearchResult.id)).where(SearchResult.search_id == search_id)
         )
+        results = await self.list_result_batch(
+            session,
+            search_id,
+            offset=offset,
+            limit=limit,
+        )
+        return results, int(total or 0)
+
+    async def list_result_batch(
+        self,
+        session: AsyncSession,
+        search_id: uuid.UUID,
+        *,
+        offset: int,
+        limit: int,
+    ) -> list[SearchResult]:
+        """Load one bounded, fully-hydrated result batch without recounting rows."""
+
         statement = (
             select(SearchResult)
             .where(SearchResult.search_id == search_id)
@@ -44,5 +62,4 @@ class SearchRepository:
             .offset(offset)
             .limit(limit)
         )
-        results = list((await session.scalars(statement)).all())
-        return results, int(total or 0)
+        return list((await session.scalars(statement)).all())

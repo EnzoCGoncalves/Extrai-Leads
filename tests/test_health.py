@@ -13,7 +13,7 @@ async def test_health_checks_real_database_connection(client: AsyncClient) -> No
     assert response.json() == {
         "status": "healthy",
         "application": "Extrai Leads",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "environment": "test",
         "database": "up",
     }

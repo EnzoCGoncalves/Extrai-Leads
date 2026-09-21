@@ -1,6 +1,6 @@
 [project]
 name = "extrais-leads"
-version = "0.3.0"
+version = "0.4.0"
 description = "Plataforma modular de prospecção e qualificação de empresas"
 readme = "README.md"
 authors = [
@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.20,<1.21",
     "fastapi>=0.141.1,<0.142",
     "httpx>=0.28.1,<0.29",
+    "openpyxl>=3.1.5,<3.2",
     "pydantic-settings>=2.15,<2.16",
     "sqlalchemy[asyncio]>=2.0.54,<2.1",
     "uvicorn[standard]>=0.53,<0.54",

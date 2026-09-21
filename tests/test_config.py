@@ -11,6 +11,7 @@ def test_settings_have_safe_defaults() -> None:
     assert settings.api_prefix == "/api/v1"
     assert settings.database_url.startswith("sqlite+aiosqlite:///")
     assert settings.database_auto_create is False
+    assert settings.excel_export_batch_size == 500
 
 
 def test_settings_read_environment_and_mask_secrets(monkeypatch: pytest.MonkeyPatch) -> None:

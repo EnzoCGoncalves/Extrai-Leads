@@ -5,7 +5,7 @@ fontes públicas verificáveis.
 
 ## Estado atual
 
-A **Etapa 3 — WhatsApp, enriquecimento e qualificação com IA** está implementada. O fluxo real é:
+A **Etapa 4 — exportação profissional para Excel** está implementada. O fluxo real é:
 
 ```text
 consulta
@@ -15,6 +15,7 @@ consulta
   → normalização de telefone e resolução de evidências de WhatsApp
   → deduplicação final e qualificação de categoria
   → resultados persistidos
+  → exportação .xlsx auditável sob demanda
 ```
 
 Está entregue:
@@ -41,10 +42,10 @@ Está entregue:
 - enriquecimento público de telefone, WhatsApp, Instagram, endereço e CNPJ;
 - qualificação determinística de categoria e Gemini opcional somente para casos ambíguos;
 - chamadas Gemini em lotes pequenos, com dados minimizados, cache, orçamento e fallback local;
+- exportação `.xlsx` dos resultados persistidos, em lotes e com escrita de memória limitada;
+- download com nome seguro, headers HTTP de segurança e remoção automática do arquivo temporário;
 - API paginada e migrações Alembic;
 - testes sem chamadas externas, usando transports simulados.
-
-O projeto está preparado para a **Etapa 4 — exportação real para Excel e download**.
 
 ## Política de WhatsApp
 
@@ -208,6 +209,7 @@ DATABASE_URL=postgresql+asyncpg://usuario:senha@host/banco
 | `GEMINI_MAX_QUALIFICATIONS_PER_SEARCH` | `25` | empresas ambíguas enviadas à IA |
 | `GEMINI_QUALIFICATION_BATCH_SIZE` | `10` | empresas por chamada estruturada |
 | `GEMINI_API_KEY` | vazio | habilita a etapa opcional de IA |
+| `EXCEL_EXPORT_BATCH_SIZE` | `500` | resultados lidos do banco por lote durante a exportação |
 
 Veja todas as opções em `.env.example`.
 
@@ -228,6 +230,7 @@ Endpoints:
 | `POST` | `/api/v1/searches` | cria a pesquisa e agenda a execução |
 | `GET` | `/api/v1/searches/{id}` | progresso, contagens e diagnóstico por provider |
 | `GET` | `/api/v1/searches/{id}/results` | empresas deduplicadas, fontes e evidências |
+| `GET` | `/api/v1/searches/{id}/export.xlsx` | baixa todos os resultados persistidos em Excel |
 
 Exemplo:
 
@@ -237,6 +240,8 @@ $search = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/searc
   -ContentType "application/json" -Body $body
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/searches/$($search.id)"
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/searches/$($search.id)/results"
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/v1/searches/$($search.id)/export.xlsx" `
+  -OutFile "empresas.xlsx"
 ```
 
 Estados terminais:
@@ -252,6 +257,22 @@ O GET da pesquisa retorna `discovered_count` (observações únicas dos provider
 `providers` e eventuais mensagens de erro. Cada resultado separa a confiança dos dados da
 `qualification_confidence` e expõe `qualification_method`, `qualification_reason` e
 `whatsapp_evidence`.
+
+## Exportação Excel
+
+O endpoint de exportação aceita pesquisas em estado terminal e gera uma planilha a partir dos
+resultados persistidos. Pesquisas ainda em execução retornam HTTP `409`; uma pesquisa concluída
+sem empresas produz um arquivo válido contendo apenas os cabeçalhos.
+
+A planilha inclui empresa, telefone, WhatsApp, status e evidências, fontes e URLs públicas,
+endereço, localidade, categoria, CNPJ, website, Instagram, métricas de confiança, qualificação,
+data UTC e identificadores de auditoria. Dados ausentes permanecem vazios e os valores
+`confirmed`, `unconfirmed` e `not_found` não são reinterpretados.
+
+O banco é lido em lotes configuráveis e o workbook usa o modo `write_only` do `openpyxl`.
+Consultas acima do limite físico de linhas de uma aba são divididas em abas adicionais. O exportador
+não inclui o JSON bruto dos providers, remove credenciais e parâmetros sensíveis de URLs e
+neutraliza conteúdo que poderia ser interpretado pelo Excel como fórmula.
 
 ## Deduplicação e confiança
 
@@ -281,7 +302,7 @@ uv run alembic check
 
 Os testes cobrem providers, normalização de telefone, evidência/status de WhatsApp, crawler e
 proteção SSRF, `robots.txt`, qualificação determinística/Gemini, sanitização, batching, cache,
-deduplicação, persistência, migrações e API. APIs externas são simuladas com
+deduplicação, persistência, migrações, exportação Excel em lotes e API. APIs externas são simuladas com
 `httpx.MockTransport`.
 
 ## Limites operacionais
@@ -290,6 +311,8 @@ deduplicação, persistência, migrações e API. APIs externas são simuladas c
   deve usar Redis e uma fila durável.
 - SQLite aceita poucos escritores; para carga real use PostgreSQL.
 - O banco dentro do OneDrive pode sofrer contenção. Prefira um caminho local não sincronizado.
+- Exportações grandes usam pouca memória, mas ainda exigem espaço temporário em disco até o fim
+  do download.
 - Resultados OSM dependem da cobertura colaborativa existente na região.
 - Sites sem atribuição segura, bloqueados por `robots.txt`, indisponíveis ou acima do orçamento
   permanecem sem enriquecimento; o sistema não contorna a restrição.
