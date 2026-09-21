@@ -1,0 +1,22 @@
+---
+import AppLayout from "../layouts/AppLayout.astro";
+import ProgressPanel from "../components/ProgressPanel.astro";
+import ResultsPanel from "../components/ResultsPanel.astro";
+import SearchHero from "../components/SearchHero.astro";
+import StatePanel from "../components/StatePanel.astro";
+---
+
+<AppLayout
+  title="Extrai Leads — Busca profissional de empresas"
+  description="Pesquise, qualifique e exporte empresas encontradas em fontes públicas verificáveis."
+>
+  <SearchHero />
+  <div class="dashboard-shell">
+    <ProgressPanel />
+    <StatePanel />
+    <ResultsPanel />
+  </div>
+  <script>
+    import "../scripts/dashboard";
+  </script>
+</AppLayout>

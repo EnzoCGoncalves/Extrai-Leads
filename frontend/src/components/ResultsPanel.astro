@@ -1,0 +1,67 @@
+---
+import Icon from "./Icon.astro";
+---
+
+<section class="results-section" id="resultados" data-results-section hidden aria-labelledby="results-title">
+  <div class="results-toolbar">
+    <div>
+      <span class="section-kicker"><Icon name="database" size={14} /> Base consolidada</span>
+      <h2 id="results-title">Empresas encontradas</h2>
+      <p data-results-summary></p>
+    </div>
+    <button class="export-button" type="button" data-export-button>
+      <Icon name="download" size={17} />
+      <span data-export-label>Exportar Excel</span>
+    </button>
+  </div>
+
+  <div class="metrics-grid" aria-label="Resumo da pesquisa">
+    <article class="metric-card metric-card--blue">
+      <span class="metric-card__icon"><Icon name="building" size={20} /></span>
+      <div><strong data-metric-companies>0</strong><span>empresas únicas</span></div>
+    </article>
+    <article class="metric-card metric-card--green">
+      <span class="metric-card__icon"><Icon name="whatsapp" size={20} /></span>
+      <div><strong data-metric-whatsapp>0</strong><span>com WhatsApp</span></div>
+    </article>
+    <article class="metric-card metric-card--violet">
+      <span class="metric-card__icon"><Icon name="shield" size={20} /></span>
+      <div><strong data-metric-confirmed>0</strong><span>WhatsApps confirmados</span></div>
+    </article>
+    <article class="metric-card metric-card--amber">
+      <span class="metric-card__icon"><Icon name="sparkles" size={20} /></span>
+      <div><strong data-metric-enriched>0</strong><span>dados enriquecidos</span></div>
+    </article>
+  </div>
+
+  <div class="results-card">
+    <div class="table-scroll">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th scope="col">Empresa</th>
+            <th scope="col">Contato</th>
+            <th scope="col">WhatsApp</th>
+            <th scope="col">Localização</th>
+            <th scope="col">Confiança</th>
+            <th scope="col"><span class="sr-only">Detalhes</span></th>
+          </tr>
+        </thead>
+        <tbody data-results-body></tbody>
+      </table>
+    </div>
+    <div class="mobile-results" data-mobile-results></div>
+    <div class="pagination" data-pagination>
+      <p data-page-summary></p>
+      <div class="pagination__actions">
+        <button type="button" class="page-button" data-previous-page>
+          <Icon name="chevron-left" size={16} /> Anterior
+        </button>
+        <span data-page-number>Página 1</span>
+        <button type="button" class="page-button" data-next-page>
+          Próxima <Icon name="chevron-right" size={16} />
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

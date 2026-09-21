@@ -13,6 +13,16 @@ wheels/
 .coverage
 htmlcov/
 
+# Astro frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.astro/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
 # Virtual environments
 .venv/
 venv/

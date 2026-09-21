@@ -1,0 +1,74 @@
+---
+import Icon from "./Icon.astro";
+---
+
+<section class="hero" id="pesquisar" aria-labelledby="hero-title">
+  <div class="hero__eyebrow reveal">
+    <span class="pulse-dot"></span>
+    Prospecção baseada em fontes públicas
+  </div>
+  <h1 id="hero-title" class="hero__title reveal reveal--delay-1">
+    Encontre empresas.<br />
+    <span>Qualifique oportunidades.</span>
+  </h1>
+  <p class="hero__lead reveal reveal--delay-2">
+    Pesquise empresas reais, acompanhe cada etapa da coleta e exporte leads auditáveis para Excel.
+  </p>
+
+  <form class="search-card glass-panel reveal reveal--delay-3" data-search-form novalidate>
+    <div class="search-card__glow" aria-hidden="true"></div>
+    <div class="field field--query">
+      <label for="search-category">O que você procura?</label>
+      <div class="field__control">
+        <Icon name="search" size={20} />
+        <input
+          id="search-category"
+          name="category"
+          type="text"
+          minlength="2"
+          maxlength="200"
+          autocomplete="off"
+          placeholder="Ex.: Clínicas odontológicas"
+          required
+          data-category-input
+        />
+      </div>
+      <span class="field__error" data-category-error></span>
+    </div>
+    <div class="search-card__divider" aria-hidden="true"></div>
+    <div class="field field--location">
+      <label for="search-location">Onde?</label>
+      <div class="field__control">
+        <Icon name="map-pin" size={20} />
+        <input
+          id="search-location"
+          name="location"
+          type="text"
+          minlength="2"
+          maxlength="200"
+          autocomplete="address-level2"
+          placeholder="Ex.: São Paulo, SP"
+          data-location-input
+        />
+      </div>
+      <span class="field__error" data-location-error></span>
+    </div>
+    <button class="primary-button search-card__submit" type="submit" data-search-submit>
+      <span data-submit-label>Buscar empresas</span>
+      <Icon name="arrow-up-right" size={18} />
+    </button>
+  </form>
+
+  <div class="suggestions reveal reveal--delay-3" aria-label="Sugestões de pesquisa">
+    <span>Experimente:</span>
+    <button type="button" data-suggestion-category="Restaurantes" data-suggestion-location="Campinas">
+      Restaurantes em Campinas
+    </button>
+    <button type="button" data-suggestion-category="Contadores" data-suggestion-location="Belo Horizonte">
+      Contadores em Belo Horizonte
+    </button>
+    <button type="button" data-suggestion-category="Oficinas mecânicas" data-suggestion-location="São Paulo">
+      Oficinas em São Paulo
+    </button>
+  </div>
+</section>

@@ -5,7 +5,7 @@ fontes públicas verificáveis.
 
 ## Estado atual
 
-A **Etapa 4 — exportação profissional para Excel** está implementada. O fluxo real é:
+A **Etapa 5 — interface web profissional** está implementada. O fluxo real é:
 
 ```text
 consulta
@@ -16,9 +16,19 @@ consulta
   → deduplicação final e qualificação de categoria
   → resultados persistidos
   → exportação .xlsx auditável sob demanda
+  → acompanhamento e download pela interface Astro responsiva
 ```
 
 Está entregue:
+
+- frontend Astro 7 + TypeScript separado do FastAPI, sem framework de UI no navegador;
+- interface responsiva baseada no `design2`, com tema claro/escuro e componentes reutilizáveis;
+- pesquisa real por categoria/localidade ou consulta livre, com retomada pelo ID na URL;
+- polling controlado com pausa em aba oculta, backoff de reconexão e status por provider;
+- estados de carregamento, progresso, concluído, parcial, vazio, erro e exportação;
+- resultados paginados, detalhes de fontes, evidências e qualificação sem reinterpretar dados;
+- status `confirmed`, `unconfirmed` e `not_found` preservados integralmente no frontend;
+- download Excel real com nome retornado pela API e feedback de conclusão/falha;
 
 - interpretação determinística de consultas como `Restaurantes em Campinas`;
 - provider OpenStreetMap que usa Nominatim apenas para geocodificar a cidade e Overpass para
@@ -215,6 +225,8 @@ Veja todas as opções em `.env.example`.
 
 ## Execução e API
 
+### Backend
+
 ```powershell
 uv run uvicorn extrais_leads.main:app --reload
 ```
@@ -222,6 +234,24 @@ uv run uvicorn extrais_leads.main:app --reload
 - API: `http://127.0.0.1:8000`;
 - health check: `http://127.0.0.1:8000/health`;
 - OpenAPI: `http://127.0.0.1:8000/docs`.
+
+### Frontend
+
+Em outro terminal:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
+
+Acesse `http://127.0.0.1:3000`. A variável pública `PUBLIC_API_BASE_URL` aponta para o backend e
+não deve conter chaves, tokens ou credenciais. O servidor FastAPI já permite as origens locais da
+porta 3000 e expõe somente os headers necessários para nome e contagem da exportação.
+
+Para retomar uma pesquisa já criada, abra
+`http://127.0.0.1:3000/?search=<ID_DA_PESQUISA>`.
 
 Endpoints:
 
@@ -299,6 +329,20 @@ uv run ruff check .
 uv run ruff format --check .
 uv run alembic check
 ```
+
+Frontend:
+
+```powershell
+cd frontend
+npm test
+npm run check
+npm run build
+npm run test:e2e
+```
+
+O E2E usa o Chrome local e valida o fluxo em desktop e mobile com APIs externas simuladas. Para
+usar outro executável Chromium compatível, defina `PLAYWRIGHT_CHROME_PATH` apenas no ambiente
+local.
 
 Os testes cobrem providers, normalização de telefone, evidência/status de WhatsApp, crawler e
 proteção SSRF, `robots.txt`, qualificação determinística/Gemini, sanitização, batching, cache,

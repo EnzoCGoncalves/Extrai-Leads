@@ -1,0 +1,24 @@
+---
+import Icon from "./Icon.astro";
+---
+
+<section class="progress-panel glass-panel" data-progress-panel hidden aria-labelledby="progress-title">
+  <div class="section-heading">
+    <div>
+      <span class="section-kicker"><Icon name="layers" size={14} /> Pesquisa em tempo real</span>
+      <h2 id="progress-title" data-progress-title>Preparando pesquisa</h2>
+      <p data-progress-query></p>
+    </div>
+    <span class="status-pill" data-search-status>Preparando</span>
+  </div>
+
+  <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progress-track>
+    <span data-progress-bar></span>
+  </div>
+  <div class="progress-meta">
+    <span data-progress-message>Iniciando a pesquisa…</span>
+    <strong data-progress-percent>0%</strong>
+  </div>
+
+  <div class="provider-list" data-provider-list aria-label="Status das fontes"></div>
+</section>

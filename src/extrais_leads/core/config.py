@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     osm_enabled: bool = True
     osm_nominatim_url: str = "https://nominatim.openstreetmap.org"
     osm_overpass_url: str = "https://overpass-api.de/api/interpreter"
-    osm_user_agent: str = "ExtraiLeads/0.4"
+    osm_user_agent: str = "ExtraiLeads/0.5"
     osm_contact_email: str | None = None
     osm_request_interval_seconds: float = Field(default=1.0, ge=1.0, le=30)
 
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     website_enrichment_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
     website_enrichment_request_interval_seconds: float = Field(default=0.5, ge=0.1, le=30)
     website_enrichment_cache_ttl_seconds: int = Field(default=604_800, ge=60, le=2_592_000)
-    website_enrichment_user_agent: str = "ExtraiLeads/0.4"
+    website_enrichment_user_agent: str = "ExtraiLeads/0.5"
     website_enrichment_respect_robots: bool = True
 
     excel_export_batch_size: int = Field(default=500, ge=10, le=5_000)

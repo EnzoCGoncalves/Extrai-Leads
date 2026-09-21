@@ -1,0 +1,29 @@
+---
+import Icon from "./Icon.astro";
+---
+
+<section class="state-panel glass-panel" data-state-panel aria-live="polite">
+  <div class="state-panel__art" aria-hidden="true">
+    <span><Icon name="building" size={34} /></span>
+    <i></i><i></i><i></i>
+  </div>
+  <div data-initial-state>
+    <span class="section-kicker">Pronto para começar</span>
+    <h2>Transforme uma pesquisa em uma base de oportunidades.</h2>
+    <p>Informe um segmento e uma localidade. As fontes, evidências e níveis de confiança serão exibidos sem preencher dados inexistentes.</p>
+  </div>
+  <div data-empty-state hidden>
+    <span class="section-kicker">Pesquisa concluída</span>
+    <h2>Nenhuma empresa foi encontrada.</h2>
+    <p>Tente uma categoria mais ampla, revise a localidade ou faça uma nova pesquisa.</p>
+  </div>
+  <div data-error-state hidden>
+    <span class="state-panel__error-icon"><Icon name="alert" size={22} /></span>
+    <span class="section-kicker">Não foi possível concluir</span>
+    <h2 data-error-title>Ocorreu um erro na pesquisa.</h2>
+    <p data-error-message>Tente novamente em alguns instantes.</p>
+    <button class="secondary-button" type="button" data-retry-button>
+      <Icon name="refresh" size={16} /> Tentar novamente
+    </button>
+  </div>
+</section>

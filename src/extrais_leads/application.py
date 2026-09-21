@@ -107,6 +107,7 @@ def create_app(
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
+        expose_headers=["Content-Disposition", "X-Exported-Rows"],
     )
     app.include_router(health_router)
     app.include_router(api_router, prefix=resolved_settings.api_prefix)
