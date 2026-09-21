@@ -1,0 +1,872 @@
+<html lang="en"><head><meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Design System - Luminous</title>
+<script src="assets/lucide_latest_2eebd0ebe8c2.js"></script>
+<script src="assets/resource_3fa48481346f.js"></script>
+<style>
+@import url("css2_19fd9cc6b396.css");
+body {
+font-family: 'Inter', sans-serif;
+background-color: #050505;
+}
+/* Custom glow for the lightning card */
+.electric-card {
+box-shadow: 0 0 30px rgba(249, 115, 22, 0.3), inset 0 0 20px rgba(249, 115, 22, 0.1);
+}
+.electric-border {
+background: linear-gradient(180deg, rgba(251, 146, 60, 1) 0%, rgba(251, 146, 60, 0) 100%);
+}
+/* Starry background effect */
+.stars {
+background-image:
+radial-gradient(1px 1px at 20px 30px, #fff, rgba(0,0,0,0)),
+radial-gradient(1px 1px at 40px 70px, #ffffff, rgba(0,0,0,0)),
+radial-gradient(1px 1px at 50px 160px, #ffffff, rgba(0,0,0,0)),
+radial-gradient(1.5px 1.5px at 90px 40px, #ffffff, rgba(0,0,0,0)),
+radial-gradient(1px 1px at 130px 80px, #ffffff, rgba(0,0,0,0));
+background-size: 200px 200px;
+opacity: 0.2;
+}
+/* Subtle grid background for app showcase */
+.grid-bg {
+background-image: linear-gradient(to right, #ffffff05 1px, transparent 1px),
+linear-gradient(to bottom, #ffffff05 1px, transparent 1px);
+background-size: 24px 24px;
+}
+/* Hide scrollbar for clean UI look */
+.no-scrollbar::-webkit-scrollbar {
+display: none;
+}
+.no-scrollbar {
+-ms-overflow-style: none;
+scrollbar-width: none;
+}
+</style>
+<meta content="font-geist,font-roboto,font-montserrat,font-poppins,font-playfair,font-instrument-serif,font-merriweather,font-jakarta,font-manrope,font-space-grotesk,font-work-sans,font-pt-serif,font-geist-mono,font-space-mono,font-quicksand,font-nunito" name="disabled-font-classes"/>
+<style id="aura-editor-visibility-style">
+.invisible { visibility: hidden !important; }
+</style>
+<style>
+@keyframes fadeInUpBlur{0%{opacity:0;transform:translateY(20px);filter:blur(10px)}100%{opacity:1;transform:translateY(0);filter:blur(0)}}.animate-entry{animation:fadeInUpBlur 1s cubic-bezier(0.2,0.8,0.2,1) both}.delay-75{animation-delay:75ms}.delay-100{animation-delay:100ms}.delay-150{animation-delay:150ms}.delay-200{animation-delay:200ms}.delay-300{animation-delay:300ms}.delay-500{animation-delay:500ms}.delay-700{animation-delay:700ms}
+</style>
+<style class="">
+/*
+Sequence animation intro. Usage:
+1) Insert this code in the <head>
+2) Add to Tailwind Classes: [animation:animationIn_0.8s_ease-out_0.1s_both]
+*/
+@keyframes animationIn {
+0% {
+opacity: 0;
+transform: translateY(30px);
+filter: blur(8px);
+}
+100% {
+opacity: 1;
+transform: translateY(0);
+filter: blur(0px);
+}
+}
+</style>
+<script>
+/*
+Sequence animation on scroll when visible. Requires Animation Keyframe. Usage:
+1) Insert this code in the <head> along with the Animation Keyframe code.
+2) Add to Tailwind Classes: [animation:animationIn_0.8s_ease-out_0.1s_both] animate-on-scroll
+*/
+(function () {
+// Inject CSS for paused/running states
+const style = document.createElement("style");
+style.textContent = `
+/* Default: paused */
+.animate-on-scroll { animation-play-state: paused !important; }
+/* Activated by JS */
+.animate-on-scroll.animate { animation-play-state: running !important; }
+`;
+document.head.appendChild(style);
+const once = true;
+if (!window.__inViewIO) {
+window.__inViewIO = new IntersectionObserver((entries) => {
+entries.forEach((entry) => {
+if (entry.isIntersecting) {
+entry.target.classList.add("animate");
+if (once) window.__inViewIO.unobserve(entry.target);
+}
+});
+}, { threshold: 0.2, rootMargin: "0px 0px -10% 0px" });
+}
+window.initInViewAnimations = function (selector = ".animate-on-scroll") {
+document.querySelectorAll(selector).forEach((el) => {
+window.__inViewIO.observe(el); // observing twice is a no-op
+});
+};
+document.addEventListener("DOMContentLoaded", () => initInViewAnimations());
+})();
+</script>
+<link href="assets/css2_a7b22b336fe1.css" id="all-fonts-link-font-bricolage" rel="stylesheet"/>
+<style id="all-fonts-style-font-bricolage">
+.font-bricolage { font-family: 'Bricolage Grotesque', sans-serif !important; }
+</style>
+<style id="border-gradient-shared-style">
+[style*="--border-gradient"]::before {
+content: "";
+position: absolute;
+inset: 0;
+padding: 1px;
+border-radius: var(--border-radius-before, inherit);
+-webkit-mask: linear-gradient(#fff 0 0) content-box,
+linear-gradient(#fff 0 0);
+-webkit-mask-composite: xor;
+mask-composite: exclude;
+background: var(--border-gradient);
+pointer-events: none;
+}
+</style></head>
+<body class="min-h-screen overflow-x-hidden selection:bg-orange-500/30 text-white bg-[#050505] relative">
+<!-- Background Gradients -->
+<div class="fixed z-0 pointer-events-none top-0 right-0 bottom-0 left-0">
+<div class="stars absolute inset-0"></div>
+<div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-orange-900/10 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-0 right-0 w-[600px] h-[600px] bg-orange-950/20 blur-[100px] rounded-full"></div>
+</div>
+
+<!-- Design System Navigation -->
+<nav class="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-md border-b border-white/5">
+<div class="max-w-7xl mx-auto px-6 py-4">
+<div class="flex items-center justify-between">
+<div class="flex gap-2 gap-x-2 gap-y-2 items-center">
+<div class="relative flex items-center justify-center w-8 h-8">
+<svg class="lucide lucide-asterisk text-white w-8 h-8 absolute rotate-45" data-lucide="asterisk" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6v12"></path>
+<path d="M17.196 9 6.804 15"></path>
+<path d="m6.804 9 10.392 6"></path>
+</svg>
+<svg class="lucide lucide-asterisk absolute w-[32px] h-[32px]" data-icon-replaced="true" data-lucide="asterisk" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" style="width: 32px; height: 32px; color: rgb(249, 115, 22);" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6v12"></path>
+<path d="M17.196 9 6.804 15"></path>
+<path d="m6.804 9 10.392 6"></path>
+</svg>
+</div>
+<span class="text-xl text-white font-sans" style="">Design System</span>
+</div>
+<div class="hidden md:flex items-center gap-6 text-xs text-neutral-400">
+<a href="#hero" class="hover:text-white transition-colors font-sans">Hero</a>
+<a href="#typography" class="hover:text-white transition-colors font-sans">Typography</a>
+<a href="#colors" class="hover:text-white transition-colors font-sans">Colors</a>
+<a href="#components" class="hover:text-white transition-colors font-sans">Components</a>
+<a href="#layout" class="hover:text-white transition-colors font-sans">Layout</a>
+<a href="#motion" class="hover:text-white transition-colors font-sans">Motion</a>
+<a href="#icons" class="hover:text-white transition-colors font-sans">Icons</a>
+</div>
+</div>
+</div>
+</nav>
+
+<!-- 0) Hero Section (Exact Clone) -->
+<section id="hero" class="relative z-10">
+<!-- Navigation -->
+<nav class="relative z-50 flex items-center justify-between px-6 py-6 max-w-7xl mx-auto border-b border-white/5 animate-entry delay-75">
+<!-- Logo -->
+<div class="flex gap-2 gap-x-2 gap-y-2 items-center">
+<div class="relative flex items-center justify-center w-8 h-8">
+<svg class="lucide lucide-asterisk text-white w-8 h-8 absolute rotate-45" data-lucide="asterisk" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6v12"></path>
+<path d="M17.196 9 6.804 15"></path>
+<path d="m6.804 9 10.392 6"></path>
+</svg>
+<svg class="lucide lucide-asterisk absolute w-[32px] h-[32px]" data-icon-replaced="true" data-lucide="asterisk" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" style="width: 32px; height: 32px; color: rgb(249, 115, 22);" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6v12"></path>
+<path d="M17.196 9 6.804 15"></path>
+<path d="m6.804 9 10.392 6"></path>
+</svg>
+</div>
+<span class="text-xl text-white font-sans" style="">Luminous</span>
+</div>
+<!-- Center Menu -->
+<div class="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-1 py-1 backdrop-blur-md">
+<a class="px-4 py-1.5 bg-neutral-800/80 rounded-full text-xs text-white flex items-center gap-2 border border-white/5 shadow-inner font-sans" href="#" style="">
+<span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+          Home
+        </a>
+<a class="px-4 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors font-sans" href="#" style="">
+          About Us
+        </a>
+<a class="px-4 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors font-sans" href="#" style="">
+          Pricing
+        </a>
+<button class="px-4 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors flex items-center gap-1 font-sans" style="">
+          Features
+          <svg class="lucide lucide-chevron-down w-3 h-3" data-lucide="chevron-down" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m6 9 6 6 6-6"></path>
+</svg>
+</button>
+<a class="px-4 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors font-sans" href="#" style="">
+          Resources
+        </a>
+</div>
+<!-- CTA -->
+<a class="hidden md:block hover:brightness-110 transition-all text-sm text-white bg-gradient-to-b from-orange-400 to-orange-600 border-white/20 rounded-full border-t pt-2 pr-5 pb-2 pl-5 shadow-[0_0_15px_-3px_rgba(249,115,22,0.4)] font-sans" href="#" style="">
+        Get Started
+      </a>
+</nav>
+<!-- Hero Content -->
+<main class="grid grid-cols-1 lg:grid-cols-12 lg:gap-8 lg:pt-24 max-w-7xl mr-auto ml-auto pt-16 pr-6 pb-20 pl-6 relative items-center">
+<div class="absolute top-0 right-0 bottom-0 left-0" data-container-bg="true">
+<div class="absolute w-full h-full left-0 top-0 -z-10" data-us-project="AhqzKk9mZE0EnlENMQDi"></div>
+<script type="text/javascript">
+          !function(){if(!window.UnicornStudio){window.UnicornStudio={isInitialized:!1};var i=document.createElement("script");i.src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.34/dist/unicornStudio.umd.js",i.onload=function(){window.UnicornStudio.isInitialized||(UnicornStudio.init(),window.UnicornStudio.isInitialized=!0)},(document.head || document.body).appendChild(i)}}();
+        </script>
+</div>
+<!-- Left Column -->
+<div class="lg:col-span-7 flex flex-col relative items-start z-10">
+<!-- Tag -->
+<div class="mb-8 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm text-xs text-neutral-300 animate-entry delay-100">
+<svg class="lucide lucide-sparkles w-3 h-3 text-orange-400" data-lucide="sparkles" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path>
+<path d="M20 2v4"></path>
+<path d="M22 4h-4"></path>
+<circle cx="4" cy="20" r="2"></circle>
+</svg>
+<span class="font-sans" style="">Design System Showcase</span>
+</div>
+<!-- Headline -->
+<h1 class="text-5xl lg:text-[76px] leading-[1.05] text-white mb-6 font-bricolage font-light tracking-tight animate-entry delay-150" style="transition: outline 0.1s ease-in-out;">
+          DESIGN SYSTEM
+          <span class="inline-flex align-middle mx-1"></span>
+          COMPONENTS
+          <br/>
+          PATTERNS STYLES
+          <br/>
+          DOCUMENTATION
+        </h1>
+<!-- Subhead -->
+<p class="text-lg text-neutral-400 max-w-xl mb-10 leading-relaxed font-sans animate-entry delay-200" style="">
+          A comprehensive guide to the visual language, components, and patterns used throughout the Luminous design system.
+        </p>
+<!-- Buttons -->
+<div class="flex flex-wrap gap-4 mb-20 gap-x-4 gap-y-4 items-center animate-entry delay-300">
+<button class="group relative flex items-center justify-center gap-2.5 rounded-full bg-gradient-to-t from-yellow-200 via-orange-400 to-orange-500 px-8 py-3 text-lg font-medium text-[#2c1306] shadow-[0_0_40px_-5px_rgba(249,115,22,0.6)] ring-1 ring-inset ring-white/40 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_60px_-5px_rgba(249,115,22,0.8)] font-sans">
+<span class="font-sans" style="">Explore Components</span>
+</button>
+<button class="px-8 py-3 rounded-full bg-white text-black text-lg hover:bg-neutral-200 transition-colors font-sans" style="">
+            View Patterns
+          </button>
+</div>
+</div>
+<!-- Right Column (Card with Lightning) -->
+<div class="lg:col-span-5 flex lg:justify-end lg:mt-0 mt-0 relative justify-center z-10 animate-entry delay-500">
+<!-- Card Container -->
+<div class="relative w-[360px] bg-neutral-900 rounded-[32px] p-[2px] electric-card overflow-hidden">
+<!-- Glowing Border Gradient -->
+<div class="absolute inset-0 bg-gradient-to-b from-yellow-300 via-orange-500 to-transparent opacity-80 z-0"></div>
+<!-- Inner Card Content -->
+<div class="relative z-10 bg-[#0A0A0A] rounded-[30px] h-full p-8 flex flex-col items-start overflow-hidden">
+<!-- Background Noise/Particles inside card -->
+<div class="absolute top-0 right-0 w-full h-40 bg-gradient-to-b from-orange-500/10 to-transparent"></div>
+<!-- Header -->
+<div class="flex justify-between w-full items-start mb-6 relative">
+<span class="text-[10px] uppercase text-neutral-400 border border-white/10 px-2 py-1 rounded bg-white/5 flex items-center gap-1.5 font-sans" style="">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+</span>
+                Live Preview
+              </span>
+</div>
+<h3 class="text-xl text-white mb-2 font-sans" style="">
+              Component Library
+            </h3>
+<p class="text-xs text-neutral-400 mb-6 leading-relaxed font-sans" style="">
+              Interactive examples of all design system components.
+            </p>
+<!-- Main Stat & Graph Area -->
+<div class="w-full mb-8">
+<div class="flex items-baseline gap-2 mb-2">
+<span class="text-4xl text-transparent bg-clip-text bg-gradient-to-r from-white via-orange-200 to-orange-400 font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">
+                  +100%
+                </span>
+<span class="text-xs text-orange-500 flex items-center bg-orange-500/10 px-1.5 py-0.5 rounded font-sans" style="">
+<svg class="lucide lucide-arrow-up mr-0.5" fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3" viewbox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+<path d="m5 12 7-7 7 7"></path>
+<path d="M12 19V5"></path>
+</svg>
+                  Coverage
+                </span>
+</div>
+<!-- SVG Sparkline Chart -->
+<div class="w-full h-16 relative mt-4">
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 280 60">
+<defs>
+<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#f97316" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="#f97316" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path class="" d="M0 50 C 40 50, 60 30, 100 35 C 140 40, 160 10, 200 15 C 240 20, 260 5, 280 0 V 60 H 0 Z" fill="url(#chartGradient)"></path>
+<path class="" d="M0 50 C 40 50, 60 30, 100 35 C 140 40, 160 10, 200 15 C 240 20, 260 5, 280 0" fill="none" stroke="#f97316" stroke-linecap="round" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+<!-- Data Point Dot -->
+<circle cx="280" cy="0" fill="#fff" r="3" stroke="#f97316" stroke-width="2"></circle>
+</svg>
+</div>
+</div>
+<!-- Button -->
+<button class="hover:brightness-110 transition-all text-sm text-white bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 w-full border-white/20 rounded-full border-t mb-8 pt-3 pb-3 shadow-[0_4px_15px_rgba(249,115,22,0.4)] font-sans" style="">
+              View Components
+            </button>
+<!-- Metrics List -->
+<div class="space-y-4 w-full mb-8">
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-3 text-neutral-300">
+<svg class="lucide lucide-eye w-4 h-4 text-orange-500" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+<circle cx="12" cy="12" r="3"></circle>
+</svg>
+<span class="font-sans" style="">Components</span>
+</div>
+<span class="text-white font-sans" style="">24</span>
+</div>
+</div>
+<!-- Divider -->
+<div class="relative w-full h-px bg-gradient-to-r from-transparent via-orange-500/50 to-transparent mb-6 flex items-center justify-center">
+<span class="bg-[#0A0A0A] px-2 text-[10px] text-neutral-400 uppercase font-sans" style="">
+                Design Tokens
+              </span>
+</div>
+<!-- Bottom Tags -->
+<div class="flex gap-4 w-full">
+<div class="flex items-center gap-1.5 text-[10px] text-neutral-400 font-sans" style="">
+<svg class="lucide lucide-sparkles w-3.5 h-3.5 text-white fill-white" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+                Live System
+              </div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</section>
+
+<!-- 1) Typography Section -->
+<section id="typography" class="max-w-7xl mx-auto px-6 py-24 relative z-10">
+<div class="mb-16">
+<h2 class="md:text-5xl text-4xl text-white font-bricolage font-light tracking-tight mb-4" style="transition: outline 0.1s ease-in-out;">Typography</h2>
+<p class="text-lg text-neutral-400 leading-relaxed font-sans">Type scale, weights, and styles used throughout the system.</p>
+</div>
+
+<div class="space-y-12">
+<!-- Typography Spec Table -->
+<div class="space-y-6">
+<!-- Heading 1 -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Heading 1</div>
+<h1 class="text-5xl lg:text-[76px] leading-[1.05] text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">The Quick Brown Fox</h1>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">76px / 80px</div>
+</div>
+
+<!-- Heading 2 -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Heading 2</div>
+<h2 class="md:text-5xl text-4xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">The Quick Brown Fox</h2>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">48px / 56px</div>
+</div>
+
+<!-- Heading 3 -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Heading 3</div>
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">The Quick Brown Fox</h3>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">24px / 32px</div>
+</div>
+
+<!-- Heading 4 -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Heading 4</div>
+<h4 class="text-xl text-white mb-2 font-sans" style="">The Quick Brown Fox</h4>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">20px / 28px</div>
+</div>
+
+<!-- Large Body -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Body Large</div>
+<p class="text-lg text-neutral-400 leading-relaxed font-sans" style="">The quick brown fox jumps over the lazy dog. This is a longer paragraph to demonstrate line height and spacing.</p>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">18px / 28px</div>
+</div>
+
+<!-- Body Regular -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Body Regular</div>
+<p class="text-sm text-neutral-400 leading-relaxed font-sans" style="">The quick brown fox jumps over the lazy dog. This is a longer paragraph to demonstrate line height and spacing.</p>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">14px / 22px</div>
+</div>
+
+<!-- Small Text -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Small</div>
+<p class="text-xs text-neutral-400 font-sans" style="">The quick brown fox jumps over the lazy dog.</p>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">12px / 16px</div>
+</div>
+
+<!-- Gradient Text -->
+<div class="flex items-start justify-between border-b border-white/5 pb-6">
+<div class="flex-1">
+<div class="text-xs text-neutral-500 mb-2 uppercase font-sans">Gradient Text</div>
+<span class="text-4xl text-transparent bg-clip-text bg-gradient-to-r from-white via-orange-200 to-orange-400 font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Gradient Heading</span>
+</div>
+<div class="text-right text-xs text-neutral-500 font-mono ml-8">36px / 44px</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- 2) Colors & Surfaces Section -->
+<section id="colors" class="max-w-7xl mx-auto px-6 py-24 relative z-10">
+<div class="mb-16">
+<h2 class="md:text-5xl text-4xl text-white font-bricolage font-light tracking-tight mb-4" style="transition: outline 0.1s ease-in-out;">Colors & Surfaces</h2>
+<p class="text-lg text-neutral-400 leading-relaxed font-sans">Color palette, backgrounds, borders, and surface treatments.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Background Colors -->
+<div class="space-y-4">
+<h3 class="text-xl text-white mb-4 font-sans" style="">Backgrounds</h3>
+<div class="space-y-3">
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-[#050505] border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">#050505</div>
+<div class="text-xs text-neutral-500 font-sans">Primary</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-[#0A0A0A] border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">#0A0A0A</div>
+<div class="text-xs text-neutral-500 font-sans">Card</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-neutral-900 border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">neutral-900</div>
+<div class="text-xs text-neutral-500 font-sans">Surface</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Text Colors -->
+<div class="space-y-4">
+<h3 class="text-xl text-white mb-4 font-sans" style="">Text Colors</h3>
+<div class="space-y-3">
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-white border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">white</div>
+<div class="text-xs text-neutral-500 font-sans">Primary</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-neutral-300 border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">neutral-300</div>
+<div class="text-xs text-neutral-500 font-sans">Secondary</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-neutral-400 border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">neutral-400</div>
+<div class="text-xs text-neutral-500 font-sans">Tertiary</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Accent Colors -->
+<div class="space-y-4">
+<h3 class="text-xl text-white mb-4 font-sans" style="">Accent Colors</h3>
+<div class="space-y-3">
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-orange-400 border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">orange-400</div>
+<div class="text-xs text-neutral-500 font-sans">Primary</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-orange-500 border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">orange-500</div>
+<div class="text-xs text-neutral-500 font-sans">Accent</div>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-amber-500 border border-white/10"></div>
+<div>
+<div class="text-sm text-white font-sans">amber-500</div>
+<div class="text-xs text-neutral-500 font-sans">Highlight</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Gradients -->
+<div class="md:col-span-2 lg:col-span-3 space-y-4">
+<h3 class="text-xl text-white mb-4 font-sans" style="">Gradients</h3>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="h-24 rounded-xl bg-gradient-to-t from-yellow-200 via-orange-400 to-orange-500 border border-white/10"></div>
+<div class="h-24 rounded-xl bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 border border-white/10"></div>
+<div class="h-24 rounded-xl bg-gradient-to-r from-white via-orange-200 to-orange-400 border border-white/10"></div>
+</div>
+</div>
+
+<!-- Borders & Overlays -->
+<div class="md:col-span-2 lg:col-span-3 space-y-4">
+<h3 class="text-xl text-white mb-4 font-sans" style="">Borders & Overlays</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="p-6 rounded-xl border border-white/5 bg-white/5 backdrop-blur-sm">
+<div class="text-sm text-white mb-2 font-sans">border-white/5</div>
+<div class="text-xs text-neutral-400 font-sans">Subtle border</div>
+</div>
+<div class="p-6 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm">
+<div class="text-sm text-white mb-2 font-sans">border-white/10</div>
+<div class="text-xs text-neutral-400 font-sans">Standard border</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- 3) UI Components Section -->
+<section id="components" class="max-w-7xl mx-auto px-6 py-24 relative z-10">
+<div class="mb-16">
+<h2 class="md:text-5xl text-4xl text-white font-bricolage font-light tracking-tight mb-4" style="transition: outline 0.1s ease-in-out;">UI Components</h2>
+<p class="text-lg text-neutral-400 leading-relaxed font-sans">Interactive components and their states.</p>
+</div>
+
+<div class="space-y-16">
+<!-- Buttons -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Buttons</h3>
+<div class="flex flex-wrap gap-4 items-center">
+<button class="group relative flex items-center justify-center gap-2.5 rounded-full bg-gradient-to-t from-yellow-200 via-orange-400 to-orange-500 px-8 py-3 text-lg font-medium text-[#2c1306] shadow-[0_0_40px_-5px_rgba(249,115,22,0.6)] ring-1 ring-inset ring-white/40 transition-all duration-300 hover:scale-105 hover:shadow-[0_0_60px_-5px_rgba(249,115,22,0.8)] font-sans">
+<span class="font-sans" style="">Primary</span>
+</button>
+<button class="px-8 py-3 rounded-full bg-white text-black text-lg hover:bg-neutral-200 transition-colors font-sans" style="">
+            Secondary
+          </button>
+<button class="hover:brightness-110 transition-all text-sm text-white bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 border-white/20 rounded-full border-t pt-3 pb-3 pr-5 pl-5 shadow-[0_4px_15px_rgba(249,115,22,0.4)] font-sans" style="">
+              Tertiary
+            </button>
+<button class="px-4 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors font-sans" style="">
+              Text Button
+            </button>
+</div>
+</div>
+
+<!-- Cards -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Cards</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Standard Card -->
+<div class="rounded-xl ring-1 ring-white/10 bg-white/[0.02] p-6 hover:bg-white/[0.04] transition-colors">
+<h4 class="text-sm text-white mb-2 font-sans" style="">Standard Card</h4>
+<p class="text-xs text-neutral-500 font-sans" style="">Card with subtle background and border.</p>
+</div>
+
+<!-- Electric Card -->
+<div class="relative bg-neutral-900 rounded-[32px] p-[2px] electric-card overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-b from-yellow-300 via-orange-500 to-transparent opacity-80 z-0"></div>
+<div class="relative z-10 bg-[#0A0A0A] rounded-[30px] h-full p-6">
+<h4 class="text-sm text-white mb-2 font-sans" style="">Electric Card</h4>
+<p class="text-xs text-neutral-400 font-sans" style="">Card with glowing border effect.</p>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Inputs -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Inputs</h3>
+<div class="space-y-4 max-w-md">
+<div class="hidden sm:flex items-center gap-2 bg-black/40 ring-1 ring-white/10 rounded-lg pl-2.5 pr-2.5 h-8">
+<svg class="lucide lucide-search text-neutral-500" fill="none" height="14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="14" xmlns="http://www.w3.org/2000/svg">
+<circle cx="11" cy="11" r="8"></circle>
+<path d="m21 21-4.3-4.3"></path>
+</svg>
+<input class="bg-transparent text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none w-48" placeholder="Search..." type="text"/>
+</div>
+<div class="flex items-center rounded-lg bg-[#050505] border border-white/10 focus-within:border-white/20 transition-all">
+<input class="w-full bg-transparent border-none text-sm text-white pl-4 pr-1 py-3 focus:outline-none placeholder:text-neutral-600 font-sans h-10 rounded-l-lg" placeholder="Enter your email" type="email"/>
+<button class="bg-white hover:bg-neutral-200 text-black px-4 py-2 rounded-r-lg text-sm transition-colors h-10 shadow-lg flex items-center gap-2 flex-shrink-0 font-sans" style="">
+              Submit
+            </button>
+</div>
+</div>
+</div>
+
+<!-- Badges & Tags -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Badges & Tags</h3>
+<div class="flex flex-wrap gap-4 items-center">
+<span class="text-[10px] uppercase text-neutral-400 border border-white/10 px-2 py-1 rounded bg-white/5 flex items-center gap-1.5 font-sans" style="">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+</span>
+                Live
+              </span>
+<span class="text-[11px] rounded-md bg-orange-500/10 text-orange-400 ring-1 ring-orange-500/20 px-2 py-0.5 uppercase font-sans" style="">
+                Trending
+              </span>
+<span class="text-[10px] rounded-md bg-white/5 text-neutral-300 ring-1 ring-white/10 px-2 py-0.5 font-sans" style="">
+                Tag
+              </span>
+</div>
+</div>
+
+<!-- Toggles -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Toggles</h3>
+<div class="space-y-4">
+<div class="flex items-center justify-between max-w-md">
+<span class="text-sm text-neutral-300 font-sans" style="">
+                        Enabled
+                      </span>
+<button aria-pressed="true" class="relative inline-flex h-5 w-9 items-center rounded-full bg-orange-500/20 ring-1 ring-orange-500/30">
+<span class="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-orange-400 translate-x-4 transition-transform shadow-sm"></span>
+<span class="sr-only font-sans" style="">toggle</span>
+</button>
+</div>
+<div class="flex items-center justify-between max-w-md">
+<span class="text-sm text-neutral-300 font-sans" style="">
+                        Disabled
+                      </span>
+<button aria-pressed="false" class="relative inline-flex h-5 w-9 items-center rounded-full bg-white/10 ring-1 ring-white/10">
+<span class="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-neutral-400 translate-x-0 transition-transform shadow-sm"></span>
+<span class="sr-only font-sans" style="">toggle</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- 4) Layout & Spacing Section -->
+<section id="layout" class="max-w-7xl mx-auto px-6 py-24 relative z-10">
+<div class="mb-16">
+<h2 class="md:text-5xl text-4xl text-white font-bricolage font-light tracking-tight mb-4" style="transition: outline 0.1s ease-in-out;">Layout & Spacing</h2>
+<p class="text-lg text-neutral-400 leading-relaxed font-sans">Grid systems, containers, and spacing patterns.</p>
+</div>
+
+<div class="space-y-16">
+<!-- Container -->
+<div class="space-y-6">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Container</h3>
+<div class="max-w-7xl mx-auto px-6 py-8 border border-white/10 rounded-xl bg-white/5">
+<div class="text-sm text-white font-sans">max-w-7xl mx-auto px-6</div>
+</div>
+</div>
+
+<!-- Grid System -->
+<div class="space-y-6">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Grid System</h3>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<div class="lg:col-span-7 p-6 border border-white/10 rounded-xl bg-white/5">
+<div class="text-sm text-white font-sans">lg:col-span-7</div>
+</div>
+<div class="lg:col-span-5 p-6 border border-white/10 rounded-xl bg-white/5">
+<div class="text-sm text-white font-sans">lg:col-span-5</div>
+</div>
+</div>
+</div>
+
+<!-- Spacing Scale -->
+<div class="space-y-6">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Spacing Scale</h3>
+<div class="space-y-4">
+<div class="flex items-center gap-4">
+<div class="w-2 h-2 rounded-full bg-orange-500"></div>
+<div class="text-sm text-white font-sans">gap-2 (8px)</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-4 h-4 rounded-full bg-orange-500"></div>
+<div class="text-sm text-white font-sans">gap-4 (16px)</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-6 h-6 rounded-full bg-orange-500"></div>
+<div class="text-sm text-white font-sans">gap-6 (24px)</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-full bg-orange-500"></div>
+<div class="text-sm text-white font-sans">gap-8 (32px)</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- 5) Motion & Interaction Section -->
+<section id="motion" class="max-w-7xl mx-auto px-6 py-24 relative z-10">
+<div class="mb-16">
+<h2 class="md:text-5xl text-4xl text-white font-bricolage font-light tracking-tight mb-4" style="transition: outline 0.1s ease-in-out;">Motion & Interaction</h2>
+<p class="text-lg text-neutral-400 leading-relaxed font-sans">Animations, transitions, and interactive behaviors.</p>
+</div>
+
+<div class="space-y-16">
+<!-- Entrance Animations -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Entrance Animations</h3>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="p-6 border border-white/10 rounded-xl bg-white/5 animate-entry delay-100">
+<div class="text-sm text-white mb-2 font-sans">fadeInUpBlur</div>
+<div class="text-xs text-neutral-400 font-sans">delay-100</div>
+</div>
+<div class="p-6 border border-white/10 rounded-xl bg-white/5 animate-entry delay-200">
+<div class="text-sm text-white mb-2 font-sans">fadeInUpBlur</div>
+<div class="text-xs text-neutral-400 font-sans">delay-200</div>
+</div>
+<div class="p-6 border border-white/10 rounded-xl bg-white/5 animate-entry delay-300">
+<div class="text-sm text-white mb-2 font-sans">fadeInUpBlur</div>
+<div class="text-xs text-neutral-400 font-sans">delay-300</div>
+</div>
+</div>
+</div>
+
+<!-- Hover Effects -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Hover Effects</h3>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="p-6 border border-white/10 rounded-xl bg-white/5 hover:bg-white/[0.04] transition-colors cursor-pointer">
+<div class="text-sm text-white mb-2 font-sans">Background Change</div>
+<div class="text-xs text-neutral-400 font-sans">hover:bg-white/[0.04]</div>
+</div>
+<div class="p-6 border border-white/10 rounded-xl bg-white/5 hover:border-white/20 transition-colors cursor-pointer">
+<div class="text-sm text-white mb-2 font-sans">Border Highlight</div>
+<div class="text-xs text-neutral-400 font-sans">hover:border-white/20</div>
+</div>
+<div class="p-6 border border-white/10 rounded-xl bg-white/5 hover:scale-105 transition-transform cursor-pointer">
+<div class="text-sm text-white mb-2 font-sans">Scale Transform</div>
+<div class="text-xs text-neutral-400 font-sans">hover:scale-105</div>
+</div>
+</div>
+</div>
+
+<!-- Scroll Animations -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Scroll Animations</h3>
+<div class="p-6 border border-white/10 rounded-xl bg-white/5 [animation:animationIn_0.8s_ease-out_0.1s_both] animate-on-scroll">
+<div class="text-sm text-white mb-2 font-sans">animate-on-scroll</div>
+<div class="text-xs text-neutral-400 font-sans">Triggers when element enters viewport</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- 6) Icons Section -->
+<section id="icons" class="max-w-7xl mx-auto px-6 py-24 relative z-10">
+<div class="mb-16">
+<h2 class="md:text-5xl text-4xl text-white font-bricolage font-light tracking-tight mb-4" style="transition: outline 0.1s ease-in-out;">Icons</h2>
+<p class="text-lg text-neutral-400 leading-relaxed font-sans">Lucide icon system with size and color variants.</p>
+</div>
+
+<div class="space-y-16">
+<!-- Icon Sizes -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Icon Sizes</h3>
+<div class="flex items-center gap-8">
+<svg class="lucide lucide-sparkles text-white w-3 h-3" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+<span class="text-sm text-neutral-400 font-sans">w-3 h-3 (12px)</span>
+</div>
+<div class="flex items-center gap-8">
+<svg class="lucide lucide-sparkles text-white w-4 h-4" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+<span class="text-sm text-neutral-400 font-sans">w-4 h-4 (16px)</span>
+</div>
+<div class="flex items-center gap-8">
+<svg class="lucide lucide-sparkles text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+<span class="text-sm text-neutral-400 font-sans">w-6 h-6 (24px)</span>
+</div>
+</div>
+
+<!-- Icon Colors -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Icon Colors</h3>
+<div class="flex flex-wrap gap-8">
+<svg class="lucide lucide-sparkles text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+<svg class="lucide lucide-sparkles text-neutral-400 w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+<svg class="lucide lucide-sparkles text-orange-400 w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+<svg class="lucide lucide-sparkles text-orange-500 w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+</div>
+</div>
+
+<!-- Common Icons -->
+<div class="space-y-8">
+<h3 class="text-2xl text-white font-bricolage font-light tracking-tight" style="transition: outline 0.1s ease-in-out;">Common Icons</h3>
+<div class="grid grid-cols-4 md:grid-cols-8 gap-6">
+<svg class="lucide lucide-asterisk text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6v12"></path>
+<path d="M17.196 9 6.804 15"></path>
+<path d="m6.804 9 10.392 6"></path>
+</svg>
+<svg class="lucide lucide-sparkles text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+</svg>
+<svg class="lucide lucide-zap text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+</svg>
+<svg class="lucide lucide-trending-up text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+<polyline points="16 7 22 7 22 13"></polyline>
+</svg>
+<svg class="lucide lucide-eye text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+<circle cx="12" cy="12" r="3"></circle>
+</svg>
+<svg class="lucide lucide-search text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<circle cx="11" cy="11" r="8"></circle>
+<path d="m21 21-4.3-4.3"></path>
+</svg>
+<svg class="lucide lucide-chevron-down text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m6 9 6 6 6-6"></path>
+</svg>
+<svg class="lucide lucide-arrow-up text-white w-6 h-6" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="m5 12 7-7 7 7"></path>
+<path d="M12 19V5"></path>
+</svg>
+</div>
+</div>
+</div>
+</section>
+
+<script>
+      lucide.createIcons();
+    </script>
+</body></html>

@@ -1,0 +1,52 @@
+[project]
+name = "extrais-leads"
+version = "0.3.0"
+description = "Plataforma modular de prospecção e qualificação de empresas"
+readme = "README.md"
+authors = [
+    { name = "Enzo", email = "foxcontenzo@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.22.1,<0.23",
+    "alembic>=1.20,<1.21",
+    "fastapi>=0.141.1,<0.142",
+    "httpx>=0.28.1,<0.29",
+    "pydantic-settings>=2.15,<2.16",
+    "sqlalchemy[asyncio]>=2.0.54,<2.1",
+    "uvicorn[standard]>=0.53,<0.54",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "asyncpg>=0.30,<1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10",
+    "pytest-asyncio>=1.4,<2",
+    "ruff>=0.12,<1",
+]
+
+[project.scripts]
+extrais-leads = "extrais_leads.main:run"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers --basetemp=.pytest-tmp"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.format]
+quote-style = "double"

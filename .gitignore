@@ -1,0 +1,43 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+.pytest-tmp/
+.pytest-tmp*/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+
+# Local data and generated exports
+data/
+*.db
+*.sqlite
+*.sqlite3
+exports/*.xlsx
+exports/*.csv
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

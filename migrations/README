@@ -1,0 +1,7 @@
+Single-database Alembic migrations for Extrai Leads.
+
+Generate revisions only after reviewing model changes:
+
+    uv run alembic revision --autogenerate -m "description"
+
+Always inspect generated revisions before applying them.
