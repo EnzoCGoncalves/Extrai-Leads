@@ -51,3 +51,6 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.vercel]
+entrypoint = "src/extrais_leads.main:app"
