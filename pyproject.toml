@@ -53,4 +53,4 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 quote-style = "double"
 
 [tool.vercel]
-entrypoint = "src/extrais_leads.main:app"
+entrypoint = "extrais_leads.main:app"
