@@ -378,3 +378,115 @@ async def test_json_ld_adds_structured_data_but_does_not_invent_missing_values()
     assert result.cnpj is None
     assert result.whatsapp is None
     assert result.whatsapp_status is WhatsAppStatus.NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_extracts_schema_meta_attributes_and_deduplicates_phone_evidence() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(
+            200,
+            text="""
+                <html><head>
+                  <meta itemprop="telephone" content="+55 (19) 3818-2000">
+                  <meta name="contact-phone" content="(19) 3818-2000">
+                </head><body>
+                  <span itemprop="telephone" content="+55 19 3818 2000"></span>
+                  <button data-phone="(19) 3818-2000">Ligar</button>
+                  <span data-phone="12345">inválido</span>
+                </body></html>
+            """,
+            headers={"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await WebsiteEnricher(
+            client=client,
+            resolver=public_resolver,
+            max_pages=1,
+            request_interval_seconds=0,
+        ).enrich(
+            WebsiteEnrichmentRequest(company_name="Empresa", website="https://empresa.example")
+        )
+
+    assert result.phone == "551938182000"
+    phone_evidence = [item for item in result.evidence if item.field == "phone"]
+    assert {item.value for item in phone_evidence} == {"551938182000"}
+    assert {item.evidence_type for item in phone_evidence} == {"meta_tag", "html_attribute"}
+    assert all(item.source_url == "https://empresa.example/" for item in phone_evidence)
+    assert result.whatsapp_status is WhatsAppStatus.NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_extracts_contacts_from_bounded_inline_javascript_without_rendering() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return httpx.Response(
+            200,
+            text="""
+                <html><body><div id="root"></div>
+                  <script>
+                    window.__PUBLIC_DATA__ = {
+                      "telephone": "+55 (19) 3818-2000",
+                      "whatsapp": "https:\\/\\/api.whatsapp.com\\/send?phone=5519998765432",
+                      "trackingId": "5519123456789"
+                    };
+                  </script>
+                </body></html>
+            """,
+            headers={"Content-Type": "text/html"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await WebsiteEnricher(
+            client=client,
+            resolver=public_resolver,
+            max_pages=1,
+            request_interval_seconds=0,
+        ).enrich(
+            WebsiteEnrichmentRequest(company_name="Empresa", website="https://empresa.example")
+        )
+
+    assert result.phone == "551938182000"
+    assert result.whatsapp == "5519998765432"
+    assert result.whatsapp_status is WhatsAppStatus.CONFIRMED
+    assert {(item.field, item.evidence_type) for item in result.evidence} >= {
+        ("phone", "embedded_data"),
+        ("whatsapp", "whatsapp_link"),
+    }
+    assert all(item.value != "5519123456789" for item in result.evidence)
+
+
+@pytest.mark.asyncio
+async def test_prioritizes_contact_and_service_pages_with_accented_links() -> None:
+    requested_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        if request.url.path == "/":
+            return httpx.Response(
+                200,
+                text="""
+                    <a href="/sobre">Sobre</a>
+                    <a href="/localização">Localização</a>
+                    <a href="/fale-conosco">Fale conosco</a>
+                """,
+                headers={"Content-Type": "text/html"},
+            )
+        return httpx.Response(200, text="<p>sem contato</p>", headers={"Content-Type": "text/html"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await WebsiteEnricher(
+            client=client,
+            resolver=public_resolver,
+            max_pages=3,
+            request_interval_seconds=0,
+        ).enrich(
+            WebsiteEnrichmentRequest(company_name="Empresa", website="https://empresa.example")
+        )
+
+    assert requested_paths == ["/robots.txt", "/", "/fale-conosco", "/localização"]

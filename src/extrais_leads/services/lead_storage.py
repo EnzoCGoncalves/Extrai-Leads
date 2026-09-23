@@ -23,7 +23,10 @@ from extrais_leads.services.normalization import (
     normalize_url,
 )
 from extrais_leads.services.qualification import QualificationResult
-from extrais_leads.services.whatsapp_evidence import WhatsAppResolution
+from extrais_leads.services.whatsapp_evidence import (
+    WhatsAppResolution,
+    normalize_brazilian_phone,
+)
 
 
 class LeadStorageService:
@@ -118,6 +121,20 @@ class LeadStorageService:
                             },
                         )
                     )
+            for evidence in _phone_evidence_records(resolved):
+                session.add(
+                    ContactEvidence(
+                        search_result_id=result.id,
+                        contact_type="phone",
+                        normalized_value=evidence["normalized_value"],
+                        evidence_type=evidence["evidence_type"],
+                        source_provider="official_website",
+                        source_url=evidence["source_url"],
+                        official_source=True,
+                        excerpt=evidence["excerpt"],
+                        details={"status": "found", "source": "official_website"},
+                    )
+                )
             persisted.append(result)
         return persisted
 
@@ -253,6 +270,47 @@ class LeadStorageService:
 
 def _fingerprint(normalized_name: str) -> str:
     return sha256(normalized_name.encode("utf-8")).hexdigest()
+
+
+def _phone_evidence_records(resolved: ResolvedCompany) -> list[dict[str, str | None]]:
+    selected_phone = normalize_brazilian_phone(resolved.phone)
+    if selected_phone is None:
+        return []
+    records: list[dict[str, str | None]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for source in resolved.sources:
+        if source.provider != "official_website":
+            continue
+        raw_records = source.data.get("enrichment_evidence")
+        if not isinstance(raw_records, list):
+            continue
+        for raw in raw_records:
+            if not isinstance(raw, dict) or raw.get("field") != "phone":
+                continue
+            value = raw.get("value")
+            source_url = raw.get("source_url")
+            evidence_type = raw.get("evidence_type")
+            if not all(
+                isinstance(item, str) and item for item in (value, source_url, evidence_type)
+            ):
+                continue
+            normalized = normalize_brazilian_phone(value)
+            if normalized != selected_phone:
+                continue
+            key = (normalized, evidence_type, source_url)
+            if key in seen:
+                continue
+            seen.add(key)
+            excerpt = raw.get("excerpt")
+            records.append(
+                {
+                    "normalized_value": normalized,
+                    "evidence_type": evidence_type,
+                    "source_url": source_url,
+                    "excerpt": excerpt if isinstance(excerpt, str) else None,
+                }
+            )
+    return records
 
 
 def _same_text(left: str, right: str) -> bool:

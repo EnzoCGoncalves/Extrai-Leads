@@ -117,6 +117,19 @@ class SearchService:
                 )
                 for evidence in result.sources
             ],
+            phone_evidence=[
+                ContactEvidenceRead(
+                    number=evidence.normalized_value,
+                    evidence_type=evidence.evidence_type,
+                    source=evidence.source_provider,
+                    source_url=evidence.source_url,
+                    official_source=evidence.official_source,
+                    excerpt=evidence.excerpt,
+                    observed_at=evidence.observed_at,
+                )
+                for evidence in result.contact_evidences
+                if evidence.contact_type == "phone"
+            ],
             whatsapp_evidence=[
                 ContactEvidenceRead(
                     number=evidence.normalized_value,

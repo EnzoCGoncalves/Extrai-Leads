@@ -147,7 +147,8 @@ class WebsiteEnrichmentCoordinator:
     async def _cached_enrich(self, company: ResolvedCompany) -> WebsiteEnrichmentResult:
         assert company.website is not None
         normalized_website = normalize_url(company.website) or company.website
-        key = "website-enrichment:v1:" + sha256(normalized_website.encode("utf-8")).hexdigest()
+        # Versioned because extractor improvements must not be masked by older crawl results.
+        key = "website-enrichment:v2:" + sha256(normalized_website.encode("utf-8")).hexdigest()
         try:
             cached = await self._cache.get(key)
         except Exception:

@@ -128,6 +128,12 @@ não recebem essa confiança. O crawler acessa somente HTML público na mesma or
 home e páginas de contato/sobre, respeita `robots.txt` e aplica limites configuráveis. Falha em um
 site não elimina a empresa nem interrompe as demais.
 
+Telefones e evidências explícitas de WhatsApp são extraídos de texto visível, links `tel:`, `wa.me`
+e `api.whatsapp.com`, JSON-LD/schema.org, meta tags, atributos HTML e dados públicos embutidos em
+scripts inline. Sequências numéricas soltas em JavaScript não são aceitas. Cada telefone escolhido
+mantém URL, tipo de evidência e fonte oficial em `phone_evidence`; um telefone comum nunca é
+promovido automaticamente a WhatsApp.
+
 ### Gemini
 
 O Gemini não é fonte de empresas ou contatos. Primeiro roda a classificação determinística; o

@@ -106,6 +106,7 @@ class SearchResultRead(BaseModel):
     company: CompanyLeadRead
     sources: list[str] = Field(default_factory=list)
     source_details: list["ResultSourceRead"] = Field(default_factory=list)
+    phone_evidence: list["ContactEvidenceRead"] = Field(default_factory=list)
     whatsapp_evidence: list["ContactEvidenceRead"] = Field(default_factory=list)
 
 

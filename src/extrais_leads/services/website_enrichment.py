@@ -7,12 +7,13 @@ import json
 import re
 import socket
 import time
+import unicodedata
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Literal
-from urllib.parse import parse_qs, unquote, urljoin, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
@@ -23,7 +24,11 @@ from extrais_leads.providers.base import (
     ProviderRateLimitError,
     ProviderResponseError,
 )
-from extrais_leads.services.whatsapp_evidence import normalize_brazilian_phone
+from extrais_leads.services.whatsapp_evidence import (
+    extract_brazilian_phone_numbers,
+    extract_phone_from_whatsapp_link,
+    normalize_brazilian_phone,
+)
 
 _PROVIDER_NAME = "website"
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
@@ -49,16 +54,22 @@ _BLOCK_TAGS = {
 }
 _SKIPPED_TAGS = {"noscript", "style", "svg", "template"}
 _CONTACT_LINK_TERMS = (
-    "contato",
-    "contact",
-    "fale-conosco",
-    "fale conosco",
-    "atendimento",
-    "localizacao",
-    "localização",
-    "onde-estamos",
-    "sobre",
-    "quem-somos",
+    ("contato", 0),
+    ("contact", 0),
+    ("fale conosco", 0),
+    ("entre em contato", 0),
+    ("atendimento", 1),
+    ("telefone", 1),
+    ("whatsapp", 1),
+    ("localizacao", 2),
+    ("onde estamos", 2),
+    ("unidades", 2),
+    ("escritorios", 2),
+    ("sobre", 3),
+    ("quem somos", 3),
+    ("institucional", 3),
+    ("nossa equipe", 4),
+    ("corretores", 4),
 )
 _IGNORED_PATH_SUFFIXES = (
     ".7z",
@@ -112,6 +123,22 @@ _ADDRESS_LABEL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _CHARSET_PATTERN = re.compile(r"charset\s*=\s*[\"']?([^;\s\"']+)", re.IGNORECASE)
+_PHONE_FIELD_PATTERN = re.compile(
+    r"(?:^|[^a-z])(?:contact\s*)?(?:phone|telephone|telefone|telefone1|tel)(?:[^a-z]|$)",
+    re.IGNORECASE,
+)
+_WHATSAPP_FIELD_PATTERN = re.compile(r"(?:whats\s*app|whatsapp|whats|zap)", re.IGNORECASE)
+_EMBEDDED_FIELD_PATTERN = re.compile(
+    r"[\"'](?:contact[_-]?)?(phone|telephone|telefone|tel|whatsapp|whats_app)[\"']"
+    r"\s*:\s*[\"']([^\"']{7,160})[\"']",
+    re.IGNORECASE,
+)
+_EMBEDDED_TEL_PATTERN = re.compile(r"tel:(?:%2B|\+)?[\d%().\s\-/]{8,40}", re.IGNORECASE)
+_EMBEDDED_WHATSAPP_LINK_PATTERN = re.compile(
+    r"(?:(?:https?:)?(?:\\?/){2})?(?:wa\.me|(?:api\.|web\.)?whatsapp\.com)"
+    r"(?:\\?/|/)[^\s\"'<>]{1,200}",
+    re.IGNORECASE,
+)
 
 AddressResolver = Callable[[str, int], Awaitable[Sequence[str]]]
 EvidenceField = Literal["phone", "whatsapp", "instagram", "address", "cnpj"]
@@ -119,6 +146,9 @@ EvidenceType = Literal[
     "address_element",
     "explicit_whatsapp_label",
     "instagram_link",
+    "embedded_data",
+    "html_attribute",
+    "meta_tag",
     "structured_data",
     "tel_link",
     "visible_text",
@@ -221,6 +251,14 @@ class _Link:
         return _clean_excerpt(" ".join(self.labels), limit=300) or ""
 
 
+@dataclass(frozen=True, slots=True)
+class _AttributeValue:
+    tag: str
+    name: str
+    value: str
+    context: str
+
+
 class _DocumentParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -228,23 +266,31 @@ class _DocumentParser(HTMLParser):
         self.address_blocks: list[str] = []
         self.links: list[_Link] = []
         self.json_ld_blocks: list[str] = []
+        self.embedded_data_blocks: list[str] = []
+        self.attribute_values: list[_AttributeValue] = []
         self._skip_depth = 0
         self._address_depth = 0
         self._current_address_parts: list[str] = []
         self._json_ld_depth = 0
         self._json_ld_parts: list[str] = []
+        self._embedded_data_depth = 0
+        self._embedded_data_parts: list[str] = []
         self._active_links: list[_Link] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         lowered = tag.casefold()
         attributes = {name.casefold(): value or "" for name, value in attrs}
         if lowered == "script":
-            if attributes.get("type", "").split(";", maxsplit=1)[0].strip().casefold() in {
+            script_type = attributes.get("type", "").split(";", maxsplit=1)[0].strip().casefold()
+            if script_type in {
                 "application/ld+json",
                 "application/json+ld",
             }:
                 self._json_ld_depth += 1
                 self._json_ld_parts = []
+            elif not attributes.get("src"):
+                self._embedded_data_depth += 1
+                self._embedded_data_parts = []
             else:
                 self._skip_depth += 1
             return
@@ -253,6 +299,7 @@ class _DocumentParser(HTMLParser):
             return
         if self._skip_depth:
             return
+        self._collect_attributes(lowered, attributes)
         if lowered in _BLOCK_TAGS:
             self.text_parts.append("\n")
         if lowered == "address":
@@ -289,6 +336,12 @@ class _DocumentParser(HTMLParser):
                 if block:
                     self.json_ld_blocks.append(block)
                 self._json_ld_parts = []
+            elif self._embedded_data_depth:
+                self._embedded_data_depth -= 1
+                block = "".join(self._embedded_data_parts).strip()
+                if block:
+                    self.embedded_data_blocks.append(block)
+                self._embedded_data_parts = []
             elif self._skip_depth:
                 self._skip_depth -= 1
             return
@@ -314,6 +367,9 @@ class _DocumentParser(HTMLParser):
         if self._json_ld_depth:
             self._json_ld_parts.append(data)
             return
+        if self._embedded_data_depth:
+            self._embedded_data_parts.append(data)
+            return
         if self._skip_depth:
             return
         self.text_parts.append(data)
@@ -321,6 +377,25 @@ class _DocumentParser(HTMLParser):
             self._current_address_parts.append(data)
         for link in self._active_links:
             link.labels.append(data)
+
+    def _collect_attributes(self, tag: str, attributes: dict[str, str]) -> None:
+        context = " ".join(
+            part
+            for key in ("itemprop", "property", "name", "id", "class", "aria-label", "title")
+            if (part := attributes.get(key, "").strip())
+        )[:500]
+        for name, value in attributes.items():
+            value = value.strip()
+            if not value or len(value) > 4_096:
+                continue
+            if (
+                name in {"content", "href", "value", "aria-label", "title"}
+                or name.startswith("data-")
+                or name == "itemprop"
+            ):
+                self.attribute_values.append(
+                    _AttributeValue(tag=tag, name=name, value=value, context=context)
+                )
 
 
 class WebsiteEnricher:
@@ -823,14 +898,22 @@ def _ranked_contact_links(links: Sequence[_Link], base_url: str, scope_host: str
         lowered_path = unquote(parsed.path).casefold()
         if lowered_path.endswith(_IGNORED_PATH_SUFFIXES):
             continue
-        haystack = f"{lowered_path} {link.label.casefold()}"
-        matched = [index for index, term in enumerate(_CONTACT_LINK_TERMS) if term in haystack]
+        haystack = _searchable_text(f"{lowered_path.replace('-', ' ')} {link.label}")
+        matched = [priority for term, priority in _CONTACT_LINK_TERMS if term in haystack]
         if not matched or candidate in seen:
             continue
         seen.add(candidate)
         ranked.append((min(matched), candidate))
     ranked.sort(key=lambda item: (item[0], len(urlsplit(item[1]).path), item[1]))
     return [url for _, url in ranked]
+
+
+def _searchable_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.casefold())
+    without_accents = "".join(
+        character for character in normalized if not unicodedata.combining(character)
+    )
+    return re.sub(r"[^a-z0-9]+", " ", without_accents).strip()
 
 
 def _merge_pages(
@@ -845,7 +928,7 @@ def _merge_pages(
     warnings: list[str],
 ) -> WebsiteEnrichmentResult:
     evidence: list[EnrichmentEvidence] = []
-    seen_evidence: set[tuple[str, str, str]] = set()
+    seen_evidence: set[tuple[str, str, str, str]] = set()
 
     def add_evidence(
         field_name: EvidenceField,
@@ -854,7 +937,7 @@ def _merge_pages(
         source_url: str,
         excerpt: str | None = None,
     ) -> None:
-        key = (field_name, value, source_url)
+        key = (field_name, value, evidence_type, source_url)
         if key in seen_evidence:
             return
         seen_evidence.add(key)
@@ -901,6 +984,10 @@ def _merge_pages(
                 add_evidence(
                     "instagram", instagram, "instagram_link", source_url, link.label or None
                 )
+
+        _extract_attribute_contacts(parser, source_url, add_evidence)
+        for block in parser.embedded_data_blocks:
+            _extract_embedded_contacts(block, source_url, add_evidence)
 
         for match in _WHATSAPP_LABEL_PATTERN.finditer(text):
             whatsapp = _normalize_br_phone(match.group(1))
@@ -970,11 +1057,9 @@ def _merge_pages(
         whatsapp_status = WhatsAppStatus.UNCONFIRMED
     else:
         whatsapp_status = WhatsAppStatus.NOT_FOUND
-    phone = (
-        phone_items[0].value
-        if phone_items
-        else (whatsapp_items[0].value if whatsapp_items else None)
-    )
+    phone = _preferred_contact_value(phone_items)
+    if phone is None and whatsapp_items:
+        phone = _preferred_contact_value(whatsapp_items)
 
     return WebsiteEnrichmentResult(
         requested_url=requested_url,
@@ -993,6 +1078,130 @@ def _merge_pages(
         robots_allowed=robots_allowed,
         warnings=warnings,
     )
+
+
+def _extract_attribute_contacts(
+    parser: _DocumentParser,
+    source_url: str,
+    add_evidence: Callable[[EvidenceField, str, EvidenceType, str, str | None], None],
+) -> None:
+    for item in parser.attribute_values:
+        decoded = _decode_embedded_value(item.value)
+        context = f"{item.name} {item.context}".strip()
+        evidence_type: EvidenceType = "meta_tag" if item.tag == "meta" else "html_attribute"
+
+        whatsapp_link = extract_phone_from_whatsapp_link(decoded)
+        if whatsapp_link is not None:
+            add_evidence(
+                "whatsapp",
+                whatsapp_link.digits,
+                "whatsapp_link",
+                source_url,
+                context or "Public WhatsApp attribute",
+            )
+            continue
+
+        if decoded.casefold().startswith("tel:"):
+            if phone := _phone_from_tel_link(decoded):
+                target_field: EvidenceField = (
+                    "whatsapp" if _WHATSAPP_FIELD_PATTERN.search(context) else "phone"
+                )
+                target_type: EvidenceType = (
+                    "explicit_whatsapp_label" if target_field == "whatsapp" else "tel_link"
+                )
+                add_evidence(target_field, phone, target_type, source_url, context)
+            continue
+
+        if not (_PHONE_FIELD_PATTERN.search(context) or _WHATSAPP_FIELD_PATTERN.search(context)):
+            continue
+        for phone in extract_brazilian_phone_numbers(decoded):
+            if _WHATSAPP_FIELD_PATTERN.search(context):
+                add_evidence("whatsapp", phone, "explicit_whatsapp_label", source_url, context)
+            else:
+                add_evidence("phone", phone, evidence_type, source_url, context)
+
+
+def _extract_embedded_contacts(
+    raw: str,
+    source_url: str,
+    add_evidence: Callable[[EvidenceField, str, EvidenceType, str, str | None], None],
+) -> None:
+    # Inline state is public page data, but arbitrary digit sequences are never scanned.
+    # A number must be attached to a contact field, tel URI or WhatsApp URL.
+    decoded = _decode_embedded_value(raw[:1_000_000])
+    for match in _EMBEDDED_WHATSAPP_LINK_PATTERN.finditer(decoded):
+        candidate = match.group(0).replace("\\/", "/")
+        if phone := extract_phone_from_whatsapp_link(candidate):
+            add_evidence(
+                "whatsapp",
+                phone.digits,
+                "whatsapp_link",
+                source_url,
+                "Public WhatsApp URL in embedded page data",
+            )
+
+    for match in _EMBEDDED_TEL_PATTERN.finditer(decoded):
+        if phone := _phone_from_tel_link(match.group(0)):
+            add_evidence(
+                "phone", phone, "embedded_data", source_url, "Telephone URI in embedded page data"
+            )
+
+    for match in _EMBEDDED_FIELD_PATTERN.finditer(decoded):
+        field_name, raw_value = match.groups()
+        numbers = extract_brazilian_phone_numbers(raw_value)
+        for phone in numbers:
+            if _WHATSAPP_FIELD_PATTERN.search(field_name):
+                add_evidence(
+                    "whatsapp",
+                    phone,
+                    "explicit_whatsapp_label",
+                    source_url,
+                    f"Embedded field {field_name}",
+                )
+            else:
+                add_evidence(
+                    "phone", phone, "embedded_data", source_url, f"Embedded field {field_name}"
+                )
+
+
+def _decode_embedded_value(value: str) -> str:
+    # Common JSON/JavaScript escaping used in SSR state and data attributes.
+    return (
+        unquote(value)
+        .replace("\\/", "/")
+        .replace("\\u002B", "+")
+        .replace("\\u002b", "+")
+        .replace("&amp;", "&")
+    )
+
+
+def _preferred_contact_value(items: Sequence[EnrichmentEvidence]) -> str | None:
+    priority = {
+        "whatsapp_link": 0,
+        "tel_link": 0,
+        "structured_data": 1,
+        "meta_tag": 2,
+        "embedded_data": 3,
+        "html_attribute": 4,
+        "explicit_whatsapp_label": 4,
+        "visible_text": 5,
+    }
+    if not items:
+        return None
+    selected = min(
+        enumerate(items),
+        key=lambda pair: (
+            priority.get(pair[1].evidence_type, 10),
+            0 if _is_contact_page(pair[1].source_url) else 1,
+            pair[0],
+        ),
+    )[1]
+    return selected.value
+
+
+def _is_contact_page(url: str) -> bool:
+    path = _searchable_text(unquote(urlsplit(url).path))
+    return any(term in path for term, priority in _CONTACT_LINK_TERMS if priority <= 1)
 
 
 def _extract_json_ld(
@@ -1029,9 +1238,27 @@ def _extract_json_ld(
             if address:
                 add_evidence("address", address, "structured_data", source_url, address)
 
-        telephone = value.get("telephone")
-        if isinstance(telephone, str) and (phone := _normalize_br_phone(telephone)):
-            add_evidence("phone", phone, "structured_data", source_url, telephone)
+        for key in ("telephone", "phone", "contactPhone"):
+            telephone = value.get(key)
+            telephone_values = telephone if isinstance(telephone, list) else [telephone]
+            for raw_phone in telephone_values:
+                if isinstance(raw_phone, str) and (phone := _normalize_br_phone(raw_phone)):
+                    add_evidence("phone", phone, "structured_data", source_url, raw_phone)
+
+        for key in ("whatsapp", "whatsApp", "contact:whatsapp"):
+            raw_whatsapp = value.get(key)
+            if not isinstance(raw_whatsapp, str):
+                continue
+            parsed_link = extract_phone_from_whatsapp_link(raw_whatsapp)
+            whatsapp = parsed_link.digits if parsed_link else _normalize_br_phone(raw_whatsapp)
+            if whatsapp:
+                add_evidence(
+                    "whatsapp",
+                    whatsapp,
+                    "whatsapp_link" if parsed_link else "explicit_whatsapp_label",
+                    source_url,
+                    f"Structured field {key}",
+                )
 
         for key in ("taxID", "vatID", "cnpj"):
             raw_identifier = value.get(key)
@@ -1040,9 +1267,16 @@ def _extract_json_ld(
 
         same_as = value.get("sameAs")
         links = same_as if isinstance(same_as, list) else [same_as]
+        for key in ("url", "contactUrl"):
+            if isinstance(value.get(key), str):
+                links.append(value[key])
         for link in links:
-            if isinstance(link, str) and (instagram := _instagram_from_link(link, source_url)):
+            if not isinstance(link, str):
+                continue
+            if instagram := _instagram_from_link(link, source_url):
                 add_evidence("instagram", instagram, "structured_data", source_url, link)
+            if whatsapp := _whatsapp_from_link(link):
+                add_evidence("whatsapp", whatsapp, "whatsapp_link", source_url, link)
 
         for child in value.values():
             if isinstance(child, dict | list):
@@ -1067,23 +1301,11 @@ def _structured_address(value: dict[object, object]) -> str | None:
 
 
 def _whatsapp_from_link(href: str) -> str | None:
-    try:
-        parsed = urlsplit(
-            href if "://" in href or href.startswith("whatsapp:") else f"https:{href}"
-        )
-    except ValueError:
-        return None
-    host = (parsed.hostname or "").casefold().removeprefix("www.")
-    if parsed.scheme.casefold() == "whatsapp":
-        values = parse_qs(parsed.query).get("phone", [])
-        return _normalize_br_phone(values[0]) if values else None
-    if host == "wa.me":
-        first_segment = parsed.path.strip("/").split("/", maxsplit=1)[0]
-        return _normalize_br_phone(first_segment)
-    if host in {"api.whatsapp.com", "web.whatsapp.com"}:
-        values = parse_qs(parsed.query).get("phone", [])
-        return _normalize_br_phone(values[0]) if values else None
-    return None
+    decoded = _decode_embedded_value(href)
+    if decoded.startswith("//"):
+        decoded = f"https:{decoded}"
+    parsed = extract_phone_from_whatsapp_link(decoded)
+    return parsed.digits if parsed else None
 
 
 def _phone_from_tel_link(href: str) -> str | None:

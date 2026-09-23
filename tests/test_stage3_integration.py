@@ -144,6 +144,17 @@ async def test_runner_enriches_official_site_persists_evidence_and_reuses_cache(
     assert item["category_match"] is True
     assert item["qualification_method"] == "deterministic"
     assert "Website oficial" in item["sources"]
+    assert item["phone_evidence"] == [
+        {
+            "number": "551933334444",
+            "evidence_type": "tel_link",
+            "source": "official_website",
+            "source_url": "https://sorriso.example/contato",
+            "official_source": True,
+            "excerpt": "Telefone",
+            "observed_at": item["phone_evidence"][0]["observed_at"],
+        }
+    ]
     assert item["whatsapp_evidence"] == [
         {
             "number": "5519999998888",
