@@ -230,6 +230,18 @@ class OpenStreetMapProvider(SearchProvider):
         async with httpx.AsyncClient() as client:
             return await self._search_with_client(client, request, category, location)
 
+    async def resolve_location(self, location: str) -> _GeocodedArea:
+        """Resolve one locality while sharing OSM's rate limiter and cache.
+
+        Other geospatial providers use this method so one search does not send
+        duplicate Nominatim requests for the same locality.
+        """
+
+        if self._client is not None:
+            return await self._geocode(self._client, location)
+        async with httpx.AsyncClient() as client:
+            return await self._geocode(client, location)
+
     async def _search_with_client(
         self,
         client: httpx.AsyncClient,

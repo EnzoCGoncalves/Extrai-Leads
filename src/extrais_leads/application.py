@@ -12,7 +12,12 @@ from extrais_leads.cache import MemoryCache
 from extrais_leads.core.config import Settings, get_settings
 from extrais_leads.core.logging import configure_logging, log_event
 from extrais_leads.db import Database
-from extrais_leads.providers import OpenStreetMapProvider, SearchProvider, TavilyProvider
+from extrais_leads.providers import (
+    OpenStreetMapProvider,
+    OvertureMapsProvider,
+    SearchProvider,
+    TavilyProvider,
+)
 from extrais_leads.services.enrichment import WebsiteEnrichmentCoordinator
 from extrais_leads.services.excel_export import ExcelExportService
 from extrais_leads.services.qualification import (
@@ -125,16 +130,25 @@ def create_app(
 
 
 def _build_providers(settings: Settings) -> list[SearchProvider]:
+    openstreetmap = OpenStreetMapProvider(
+        enabled=settings.osm_enabled,
+        nominatim_url=settings.osm_nominatim_url,
+        overpass_url=settings.osm_overpass_url,
+        user_agent=settings.osm_user_agent,
+        contact_email=settings.osm_contact_email,
+        request_interval_seconds=settings.osm_request_interval_seconds,
+        timeout_seconds=settings.provider_timeout_seconds,
+        max_retries=0,
+    )
     return [
-        OpenStreetMapProvider(
-            enabled=settings.osm_enabled,
-            nominatim_url=settings.osm_nominatim_url,
-            overpass_url=settings.osm_overpass_url,
-            user_agent=settings.osm_user_agent,
-            contact_email=settings.osm_contact_email,
-            request_interval_seconds=settings.osm_request_interval_seconds,
-            timeout_seconds=settings.provider_timeout_seconds,
-            max_retries=0,
+        openstreetmap,
+        OvertureMapsProvider(
+            openstreetmap.resolve_location,
+            enabled=settings.overture_enabled,
+            min_confidence=settings.overture_min_confidence,
+            connect_timeout_seconds=settings.overture_connect_timeout_seconds,
+            request_timeout_seconds=settings.overture_request_timeout_seconds,
+            use_stac=settings.overture_use_stac,
         ),
         TavilyProvider(
             settings.tavily_api_key,

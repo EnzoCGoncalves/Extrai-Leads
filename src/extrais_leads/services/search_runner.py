@@ -118,6 +118,28 @@ class SearchRunner:
             observations = [lead for outcome in outcomes for lead in outcome.leads]
             await self._set_stage(search_id, SearchStage.ENRICHING, 65)
             initial_resolved = deduplicate_companies(observations)
+            for outcome in outcomes:
+                final_results = sum(
+                    any(source.provider == outcome.provider for source in company.sources)
+                    for company in initial_resolved
+                )
+                exclusive_results = sum(
+                    {source.provider for source in company.sources} == {outcome.provider}
+                    for company in initial_resolved
+                )
+                log_event(
+                    logger,
+                    "PROVIDER_FINAL_SUMMARY",
+                    "Contribuição final do provider calculada",
+                    search_id=search_id,
+                    provider=outcome.provider,
+                    raw_results=outcome.raw_count,
+                    rejected=outcome.rejected_count,
+                    duplicates=outcome.duplicate_count,
+                    new_results=len(outcome.leads),
+                    final_results=final_results,
+                    exclusive_final_results=exclusive_results,
+                )
             log_event(
                 logger,
                 "DISCOVERY_RESOLUTION",
@@ -290,7 +312,11 @@ class SearchRunner:
                         max_results=(
                             self._settings.tavily_max_results_per_query
                             if provider.name == "tavily"
-                            else None
+                            else (
+                                self._settings.provider_max_items
+                                if provider.name == "overture"
+                                else None
+                            )
                         ),
                         cursor=cursor,
                     )

@@ -81,7 +81,8 @@ O provider gratuito principal suporta atualmente:
 - restaurantes: `amenity=restaurant`;
 - clínicas odontológicas/dentistas;
 - contadores/escritórios de contabilidade;
-- oficinas mecânicas.
+- oficinas mecânicas;
+- imobiliárias/corretores de imóveis.
 
 O Nominatim resolve uma localização uma vez e seu resultado fica em cache. O provider respeita o
 mínimo de um segundo entre chamadas ao servidor público, envia `User-Agent` identificável e não o
@@ -94,13 +95,28 @@ uma instância própria ou processe extratos OSM. Consulte a
 [documentação do Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) e as
 [regras de atribuição OSM](https://osmfoundation.org/wiki/Licence/Attribution_Guidelines).
 
+### Overture Maps Places
+
+O provider Overture consulta o recorte geográfico da localidade diretamente nos GeoParquet
+oficiais, usando o cliente `overturemaps` e o bounding box resolvido pelo mesmo cache Nominatim do
+OSM. O conjunto global não é baixado. A release mais recente é descoberta no catálogo oficial e
+os resultados idênticos continuam protegidos pelo cache geral da pesquisa.
+
+A seleção usa a taxonomia Overture, confiança mínima e estado operacional. Categorias genéricas
+de negócios imobiliários exigem também evidência no nome para não transformar condomínios e
+empreendimentos residenciais em imobiliárias. Cada lead preserva GERS ID, release, datasets,
+licenças, atribuição, coordenadas e confiança. Consulte o
+[guia de Places](https://docs.overturemaps.org/guides/places/) e as
+[regras de atribuição](https://docs.overturemaps.org/attribution/).
+
 ### Tavily
 
 Quando `TAVILY_API_KEY` está preenchida, a Tavily amplia a descoberta de sites e páginas
 públicas. A API limita cada chamada a 20 resultados e não fornece paginação real; por isso o
-sistema usa consultas complementares determinísticas, deduplica as URLs e encerra depois de duas
-consultas consecutivas com ganho baixo. O padrão é quatro consultas `basic`, configurável até
-oito. Consulte a [Search API](https://docs.tavily.com/documentation/api-reference/endpoint/search),
+sistema usa consultas complementares determinísticas e deduplica as URLs. Todas as variações
+planejadas são executadas, salvo quando a trava global de itens é alcançada. O padrão é quatro
+consultas `basic`, configurável até oito. Consulte a
+[Search API](https://docs.tavily.com/documentation/api-reference/endpoint/search),
 os [créditos](https://docs.tavily.com/documentation/api-credits) e os
 [limites](https://docs.tavily.com/documentation/rate-limits).
 
@@ -150,7 +166,7 @@ src/extrais_leads/
 ├── core/                # configuração e logs com redação de segredos
 ├── db/                  # SQLAlchemy assíncrono
 ├── models/              # entidades persistentes
-├── providers/           # contrato, OpenStreetMap e Tavily
+├── providers/           # contrato, OpenStreetMap, Overture e Tavily
 ├── repositories/        # consultas ao banco
 ├── schemas/             # contratos da API
 └── services/            # busca, deduplicação, enrichment, evidências e qualificação
@@ -180,9 +196,9 @@ uv run alembic upgrade head
 ```
 
 Preencha `TAVILY_API_KEY` para ativar a Tavily e `GEMINI_API_KEY` para permitir a qualificação
-opcional de casos ambíguos. O OpenStreetMap funciona sem chave; configure `OSM_CONTACT_EMAIL` e
-um `OSM_USER_AGENT` que identifique sua instalação. Nunca coloque credenciais no `.env.example`
-ou no repositório.
+opcional de casos ambíguos. OpenStreetMap e Overture funcionam sem chave; configure
+`OSM_CONTACT_EMAIL` e um `OSM_USER_AGENT` que identifique sua instalação. Nunca coloque
+credenciais no `.env.example` ou no repositório.
 
 Para PostgreSQL:
 
@@ -208,6 +224,9 @@ DATABASE_URL=postgresql+asyncpg://usuario:senha@host/banco
 | `CACHE_DEFAULT_TTL_SECONDS` | `86400` | validade de resultados externos idênticos |
 | `OSM_ENABLED` | `true` | ativa OpenStreetMap |
 | `OSM_REQUEST_INTERVAL_SECONDS` | `1` | intervalo obrigatório do Nominatim público |
+| `OVERTURE_ENABLED` | `true` | ativa Overture Maps Places regional |
+| `OVERTURE_MIN_CONFIDENCE` | `0.2` | piso de confiança contra registros suspeitos |
+| `OVERTURE_USE_STAC` | `false` | usa índice STAC quando a release cobrir corretamente a região |
 | `TAVILY_API_KEY` | vazio | ativa Tavily quando configurada |
 | `WEBSITE_ENRICHMENT_ENABLED` | `true` | ativa enriquecimento limitado do site oficial |
 | `WEBSITE_ENRICHMENT_MAX_COMPANIES` | `250` | orçamento de sites por pesquisa |
@@ -358,6 +377,8 @@ deduplicação, persistência, migrações, exportação Excel em lotes e API. A
 - Exportações grandes usam pouca memória, mas ainda exigem espaço temporário em disco até o fim
   do download.
 - Resultados OSM dependem da cobertura colaborativa existente na região.
+- Overture é atualizado em releases mensais e pode conter registros incompletos ou duplicados;
+  o sistema preserva a proveniência e aplica filtros/deduplicação, mas não presume perfeição.
 - Sites sem atribuição segura, bloqueados por `robots.txt`, indisponíveis ou acima do orçamento
   permanecem sem enriquecimento; o sistema não contorna a restrição.
 - A evidência pública de WhatsApp pode ficar desatualizada e não equivale a consultar a conta em

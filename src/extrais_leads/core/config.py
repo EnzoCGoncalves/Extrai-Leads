@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     osm_contact_email: str | None = None
     osm_request_interval_seconds: float = Field(default=1.0, ge=1.0, le=30)
 
+    overture_enabled: bool = True
+    overture_min_confidence: float = Field(default=0.2, ge=0, le=1)
+    overture_connect_timeout_seconds: int = Field(default=15, ge=1, le=120)
+    overture_request_timeout_seconds: int = Field(default=45, ge=1, le=300)
+    overture_use_stac: bool = False
+
     phone_default_region: Literal["BR"] = "BR"
 
     website_enrichment_enabled: bool = True
