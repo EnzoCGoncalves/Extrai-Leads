@@ -101,6 +101,8 @@ async def test_osm_provider_normalizes_public_business_evidence() -> None:
         page = await provider.search(ProviderSearchRequest(query="Restaurantes em Campinas"))
 
     assert page.next_cursor is None
+    assert page.raw_count == 4
+    assert page.rejected_count == 2
     assert len(page.items) == 2
     lead = page.items[0]
     assert lead.name == "Restaurante Sabor"
@@ -135,6 +137,8 @@ async def test_osm_provider_normalizes_public_business_evidence() -> None:
         ("Contadores em Belo Horizonte", '["office"="accountant"]'),
         ("Escritórios de contabilidade em Recife", '["craft"="accountant"]'),
         ("Oficinas mecânicas em São Paulo", '["shop"="car_repair"]'),
+        ("Imobiliárias em Mogi Guaçu", '["office"="estate_agent"]'),
+        ("Corretoras de imóveis em Campinas", '["shop"="estate_agent"]'),
     ],
 )
 @pytest.mark.asyncio

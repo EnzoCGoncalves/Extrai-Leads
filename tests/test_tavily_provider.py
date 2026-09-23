@@ -39,6 +39,12 @@ async def test_tavily_normalizes_evidence_and_filters_listing_pages() -> None:
                         "content": "Uma lista genérica",
                         "score": 0.8,
                     },
+                    {
+                        "title": "Clínica Ideal - Entre as melhores de Campinas",
+                        "url": "https://clinicaideal.example/",
+                        "content": "Clínica odontológica em Campinas",
+                        "score": 0.79,
+                    },
                 ],
             },
         )
@@ -55,7 +61,9 @@ async def test_tavily_normalizes_evidence_and_filters_listing_pages() -> None:
             )
         )
 
-    assert len(page.items) == 1
+    assert len(page.items) == 2
+    assert page.raw_count == 3
+    assert page.rejected_count == 1
     lead = page.items[0]
     assert lead.name == "Clínica Sorriso"
     assert lead.phone == "(19) 3333-4444"
@@ -66,6 +74,7 @@ async def test_tavily_normalizes_evidence_and_filters_listing_pages() -> None:
     assert lead.cnpj == "12.345.678/0001-90"
     assert lead.evidence["relevance_score"] == 0.93
     assert lead.evidence["request_id"] == "req-1"
+    assert page.items[1].name == "Clínica Ideal"
 
 
 @pytest.mark.asyncio

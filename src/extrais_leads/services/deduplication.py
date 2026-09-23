@@ -39,14 +39,30 @@ _IDENTIFIER_FIELDS = (
 _SHARED_WEBSITE_HOSTS = frozenset(
     {
         "facebook.com",
+        "guiamais.com.br",
         "instagram.com",
         "linktr.ee",
         "maps.app.goo.gl",
+        "solutudo.com.br",
         "sites.google.com",
+        "tripadvisor.com.br",
         "wa.me",
         "web.facebook.com",
         "www.facebook.com",
         "www.instagram.com",
+        "yelp.com",
+    }
+)
+_GENERIC_PAGE_NAMES = frozenset(
+    {
+        "contato",
+        "contact",
+        "fale conosco",
+        "home",
+        "inicio",
+        "pagina inicial",
+        "sobre",
+        "sobre nos",
     }
 )
 
@@ -317,6 +333,76 @@ def _website_identity(value: str | None) -> str | None:
     return host
 
 
+def _website_exact_identity(value: str | None) -> str | None:
+    normalized = normalize_url(value)
+    if not normalized:
+        return None
+    parsed = urlsplit(normalized)
+    host = (parsed.hostname or "").casefold().removeprefix("www.")
+    if not host:
+        return None
+    path = parsed.path.rstrip("/") or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"{host}{path}{query}"
+
+
+def _website_host(value: str | None) -> str | None:
+    normalized = normalize_url(value)
+    if not normalized:
+        return None
+    return (urlsplit(normalized).hostname or "").casefold().removeprefix("www.") or None
+
+
+def _known_addresses_conflict(left: CompanyCandidate, right: CompanyCandidate) -> bool:
+    left_address = _normalize_identity_text(left.address)
+    right_address = _normalize_identity_text(right.address)
+    return bool(left_address and right_address and left_address != right_address)
+
+
+def _names_compatible_on_same_host(left: str, right: str) -> bool:
+    left_name = normalize_company_name(left)
+    right_name = normalize_company_name(right)
+    if not left_name or not right_name:
+        return False
+    if left_name == right_name:
+        return True
+    if left_name in _GENERIC_PAGE_NAMES or right_name in _GENERIC_PAGE_NAMES:
+        return True
+    left_tokens = set(left_name.split())
+    right_tokens = set(right_name.split())
+    shared = left_tokens & right_tokens
+    shorter = min(len(left_tokens), len(right_tokens))
+    return len(shared) >= 2 and len(shared) / shorter >= 0.75
+
+
+def _same_company_on_host(left: CompanyCandidate, right: CompanyCandidate) -> bool:
+    if _known_addresses_conflict(left, right):
+        return False
+    left_cnpj = normalize_cnpj(left.cnpj)
+    right_cnpj = normalize_cnpj(right.cnpj)
+    if left_cnpj and right_cnpj and left_cnpj != right_cnpj:
+        return False
+    if _website_exact_identity(left.website) == _website_exact_identity(right.website):
+        return True
+    left_contacts = {
+        contact
+        for contact in (_phone_identity(left.phone), _phone_identity(left.whatsapp))
+        if contact
+    }
+    right_contacts = {
+        contact
+        for contact in (_phone_identity(right.phone), _phone_identity(right.whatsapp))
+        if contact
+    }
+    if left_contacts & right_contacts:
+        return True
+    left_address = _normalize_identity_text(left.address)
+    right_address = _normalize_identity_text(right.address)
+    if left_address and left_address == right_address:
+        return True
+    return _names_compatible_on_same_host(left.name, right.name)
+
+
 def _candidate_sort_key(candidate: CompanyCandidate) -> tuple[Any, ...]:
     return (
         normalize_cnpj(candidate.cnpj) or "",
@@ -499,9 +585,10 @@ def _add_group_edges(
 
 def _identity_edges(candidates: list[CompanyCandidate]) -> dict[tuple[int, int], set[str]]:
     indexes: dict[str, dict[Any, list[int]]] = {
-        reason: defaultdict(list)
-        for reason in ("cnpj", "phone", "website", "name_address", "name_location")
+        reason: defaultdict(list) for reason in ("cnpj", "phone", "name_address", "name_location")
     }
+    exact_websites: dict[str, list[int]] = defaultdict(list)
+    website_hosts: dict[str, list[int]] = defaultdict(list)
 
     for index, candidate in enumerate(candidates):
         cnpj = normalize_cnpj(candidate.cnpj)
@@ -519,9 +606,12 @@ def _identity_edges(candidates: list[CompanyCandidate]) -> dict[tuple[int, int],
         for contact in contacts:
             indexes["phone"][contact].append(index)
 
-        website = _website_identity(candidate.website)
-        if website:
-            indexes["website"][website].append(index)
+        exact_website = _website_exact_identity(candidate.website)
+        website_host = _website_host(candidate.website)
+        if exact_website:
+            exact_websites[exact_website].append(index)
+        if website_host:
+            website_hosts[website_host].append(index)
 
         name = normalize_company_name(candidate.name)
         address = _normalize_identity_text(candidate.address)
@@ -533,9 +623,27 @@ def _identity_edges(candidates: list[CompanyCandidate]) -> dict[tuple[int, int],
             indexes["name_location"][(name, city, state or "")].append(index)
 
     edge_reasons: dict[tuple[int, int], set[str]] = defaultdict(set)
-    for reason in ("cnpj", "phone", "website", "name_address"):
+    for reason in ("cnpj", "phone", "name_address"):
         for members in indexes[reason].values():
             _add_group_edges(edge_reasons, members, reason, candidates)
+
+    for members in exact_websites.values():
+        _add_group_edges(edge_reasons, members, "website", candidates)
+
+    for host, members in website_hosts.items():
+        if host in _SHARED_WEBSITE_HOSTS or f"www.{host}" in _SHARED_WEBSITE_HOSTS:
+            continue
+        if len(members) <= 50:
+            for position, left in enumerate(members):
+                for right in members[position + 1 :]:
+                    if _same_company_on_host(candidates[left], candidates[right]):
+                        edge_reasons[(min(left, right), max(left, right))].add("website")
+            continue
+
+        # Keep very large corporate or multi-tenant hosts linear and
+        # conservative. Strong identifiers (exact URL, phone, CNPJ and
+        # name+address) were already indexed above; a shared name and domain
+        # alone are not enough to collapse branches.
 
     # Location-only matching is deliberately branch-aware: equal names in the
     # same city but at different known addresses are kept as separate branches.

@@ -73,6 +73,8 @@ class ProviderPage(BaseModel):
 
     items: list[ProviderLead] = Field(default_factory=list)
     next_cursor: str | None = None
+    raw_count: int | None = Field(default=None, ge=0)
+    rejected_count: int = Field(default=0, ge=0)
 
 
 @dataclass(frozen=True, slots=True)

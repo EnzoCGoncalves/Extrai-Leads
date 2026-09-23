@@ -52,11 +52,25 @@ logger = logging.getLogger("extrais_leads.search_runner")
 
 
 @dataclass(slots=True)
+class QueryVariationMetrics:
+    query: str
+    raw_count: int
+    rejected_count: int
+    duplicate_count: int
+    new_count: int
+    pages_count: int
+
+
+@dataclass(slots=True)
 class ProviderOutcome:
     provider: str
     leads: list[CompanyCandidate]
     error: str | None = None
     limit_reached: bool = False
+    raw_count: int = 0
+    rejected_count: int = 0
+    duplicate_count: int = 0
+    variations: tuple[QueryVariationMetrics, ...] = ()
 
     @property
     def succeeded(self) -> bool:
@@ -104,6 +118,17 @@ class SearchRunner:
             observations = [lead for outcome in outcomes for lead in outcome.leads]
             await self._set_stage(search_id, SearchStage.ENRICHING, 65)
             initial_resolved = deduplicate_companies(observations)
+            log_event(
+                logger,
+                "DISCOVERY_RESOLUTION",
+                "Resultados de descoberta consolidados",
+                search_id=search_id,
+                raw_results=sum(outcome.raw_count for outcome in outcomes),
+                provider_rejected=sum(outcome.rejected_count for outcome in outcomes),
+                provider_duplicates=sum(outcome.duplicate_count for outcome in outcomes),
+                accepted_observations=len(observations),
+                companies_after_deduplication=len(initial_resolved),
+            )
             enrichment = _empty_enrichment_batch()
             if self._enrichment is not None and initial_resolved:
                 enrichment = await self._enrichment.enrich(initial_resolved)
@@ -242,14 +267,21 @@ class SearchRunner:
         )
         collected: list[CompanyCandidate] = []
         seen: set[str] = set()
-        low_yield_streak = 0
         limit_reached = False
+        raw_count = 0
+        rejected_count = 0
+        duplicate_count = 0
+        variation_metrics: list[QueryVariationMetrics] = []
 
         try:
             for query in queries:
                 cursor: str | None = None
                 cursors_seen: set[str] = set()
                 query_new = 0
+                query_raw = 0
+                query_rejected = 0
+                query_duplicates = 0
+                pages_count = 0
                 for _page_number in range(self._settings.provider_max_pages):
                     request = ProviderSearchRequest(
                         query=query,
@@ -263,9 +295,14 @@ class SearchRunner:
                         cursor=cursor,
                     )
                     page = await self._cached_provider_call(provider, request)
+                    pages_count += 1
+                    page_raw = page.raw_count if page.raw_count is not None else len(page.items)
+                    query_raw += page_raw
+                    query_rejected += page.rejected_count
                     for lead in page.items:
                         identity = _observation_identity(lead)
                         if identity in seen:
+                            query_duplicates += 1
                             continue
                         seen.add(identity)
                         collected.append(CompanyCandidate.from_provider_lead(provider.name, lead))
@@ -280,13 +317,31 @@ class SearchRunner:
                         break
                     cursors_seen.add(cursor)
 
+                raw_count += query_raw
+                rejected_count += query_rejected
+                duplicate_count += query_duplicates
+                variation = QueryVariationMetrics(
+                    query=query,
+                    raw_count=query_raw,
+                    rejected_count=query_rejected,
+                    duplicate_count=query_duplicates,
+                    new_count=query_new,
+                    pages_count=pages_count,
+                )
+                variation_metrics.append(variation)
+                log_event(
+                    logger,
+                    "PROVIDER_VARIATION",
+                    "Variação de consulta concluída",
+                    provider=provider.name,
+                    query=query,
+                    raw_results=query_raw,
+                    rejected=query_rejected,
+                    duplicates=query_duplicates,
+                    new_results=query_new,
+                    pages=pages_count,
+                )
                 if limit_reached:
-                    break
-                if query_new < 2:
-                    low_yield_streak += 1
-                else:
-                    low_yield_streak = 0
-                if low_yield_streak >= 2:
                     break
         except ProviderError as exc:
             log_event(
@@ -297,7 +352,16 @@ class SearchRunner:
                 provider=provider.name,
                 error=str(exc),
             )
-            return ProviderOutcome(provider.name, collected, str(exc), limit_reached)
+            return ProviderOutcome(
+                provider.name,
+                collected,
+                str(exc),
+                limit_reached,
+                raw_count,
+                rejected_count,
+                duplicate_count,
+                tuple(variation_metrics),
+            )
         except Exception as exc:
             log_event(
                 logger,
@@ -312,9 +376,33 @@ class SearchRunner:
                 collected,
                 f"Unexpected provider failure ({type(exc).__name__})",
                 limit_reached,
+                raw_count,
+                rejected_count,
+                duplicate_count,
+                tuple(variation_metrics),
             )
 
-        return ProviderOutcome(provider.name, collected, limit_reached=limit_reached)
+        log_event(
+            logger,
+            "PROVIDER_SUMMARY",
+            "Provider concluído",
+            provider=provider.name,
+            raw_results=raw_count,
+            rejected=rejected_count,
+            duplicates=duplicate_count,
+            accepted_results=len(collected),
+            variations=len(variation_metrics),
+            limit_reached=limit_reached,
+        )
+        return ProviderOutcome(
+            provider.name,
+            collected,
+            limit_reached=limit_reached,
+            raw_count=raw_count,
+            rejected_count=rejected_count,
+            duplicate_count=duplicate_count,
+            variations=tuple(variation_metrics),
+        )
 
     async def _cached_provider_call(
         self, provider: SearchProvider, request: ProviderSearchRequest

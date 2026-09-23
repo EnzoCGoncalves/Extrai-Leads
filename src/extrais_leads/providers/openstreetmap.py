@@ -82,6 +82,20 @@ _CATEGORY_SPECS = (
             '["craft"="car_repair"]',
         ),
     ),
+    _CategorySpec(
+        canonical_name="Imobiliária",
+        keyword_stems=(
+            "imobili",
+            "corretor",
+            "negocio imobiliario",
+            "administracao de imove",
+            "estate agent",
+        ),
+        selectors=(
+            '["office"="estate_agent"]',
+            '["shop"="estate_agent"]',
+        ),
+    ),
 )
 
 
@@ -233,6 +247,8 @@ class OpenStreetMapProvider(SearchProvider):
             data={"data": query},
         )
         items = self._normalize_elements(payload, category, area)
+        elements = payload.get("elements") if isinstance(payload, Mapping) else None
+        raw_count = len(elements) if isinstance(elements, list) else len(items)
         if request.max_results is not None:
             items = items[: request.max_results]
 
@@ -243,7 +259,11 @@ class OpenStreetMapProvider(SearchProvider):
             provider=self.name,
             result_count=len(items),
         )
-        return ProviderPage(items=items)
+        return ProviderPage(
+            items=items,
+            raw_count=raw_count,
+            rejected_count=max(0, raw_count - len(items)),
+        )
 
     async def _geocode(self, client: httpx.AsyncClient, location: str) -> _GeocodedArea:
         cache_key = normalize_text(location)

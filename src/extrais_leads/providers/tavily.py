@@ -26,7 +26,8 @@ _CNPJ_PATTERN = re.compile(r"(?<!\d)\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s-]?(?:\d{4})[
 _WHATSAPP_LINK_PATTERN = re.compile(r"(?:wa\.me/|api\.whatsapp\.com/send\?phone=)(\d{10,15})", re.I)
 _TITLE_SEPARATOR = re.compile(r"\s+(?:\||[-\u2013\u2014])\s+")
 _LISTING_TITLE = re.compile(
-    r"\b(?:\d+\s+)?(?:melhores|lista|listagem|guia|ranking|diret[oó]rio|empresas)\b",
+    r"(?:^\s*(?:top\s+)?\d+\s+(?:das?\s+|dos?\s+|de\s+)?(?:melhores|empresas)\b|"
+    r"\b(?:lista|listagem|guia|ranking|diret[oó]rio)\s+(?:de|das?|dos?)\b)",
     re.I,
 )
 _GENERIC_PAGE = re.compile(r"\b(?:resultados? de busca|pesquisa|categoria)\b", re.I)
@@ -137,8 +138,10 @@ class TavilyProvider(SearchProvider):
 
         request_id = payload.get("request_id")
         leads: list[ProviderLead] = []
+        rejected_count = 0
         for raw_result in raw_results:
             if not isinstance(raw_result, dict):
+                rejected_count += 1
                 continue
             lead = _lead_from_result(
                 raw_result,
@@ -147,7 +150,13 @@ class TavilyProvider(SearchProvider):
             )
             if lead is not None:
                 leads.append(lead)
-        return ProviderPage(items=leads)
+            else:
+                rejected_count += 1
+        return ProviderPage(
+            items=leads,
+            raw_count=len(raw_results),
+            rejected_count=rejected_count,
+        )
 
     async def close(self) -> None:
         if self._owns_client:

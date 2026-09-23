@@ -14,6 +14,7 @@ from extrais_leads.providers import (
     ProviderSearchRequest,
     SearchProvider,
 )
+from extrais_leads.services.query_planning import SearchCriteria
 
 
 class FakeProvider(SearchProvider):
@@ -47,6 +48,44 @@ class FakeProvider(SearchProvider):
                 retryable=self.retryable,
             )
         return ProviderPage(items=self.leads)
+
+
+class VariationProvider(SearchProvider):
+    name = "variations"
+    display_name = "Variations"
+    capabilities = ProviderCapabilities(query_variations=True)
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    @property
+    def configured(self) -> bool:
+        return True
+
+    async def search(self, request: ProviderSearchRequest) -> ProviderPage:
+        self.calls.append(request.query)
+        index = len(self.calls)
+        first = ProviderLead(
+            name="Restaurante Primeiro",
+            source_url="https://primeiro.example",
+            external_id="first",
+        )
+        if index == 1:
+            return ProviderPage(items=[first], raw_count=2, rejected_count=1)
+        if index == 2:
+            return ProviderPage(items=[first], raw_count=1)
+        if index == 3:
+            return ProviderPage(raw_count=0)
+        return ProviderPage(
+            items=[
+                ProviderLead(
+                    name="Restaurante Tardio",
+                    source_url="https://tardio.example",
+                    external_id="late",
+                )
+            ],
+            raw_count=1,
+        )
 
 
 def stage2_settings(tmp_path: Path, **overrides: object) -> Settings:
@@ -174,6 +213,26 @@ async def test_runner_retries_and_keeps_partial_results_when_provider_fails(
     assert runs["transient"]["status"] == "completed"
     assert runs["failed"]["status"] == "failed"
     assert "failed unavailable" in runs["failed"]["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_runner_executes_later_variations_and_reports_discovery_metrics(
+    tmp_path: Path,
+) -> None:
+    provider = VariationProvider()
+    app = create_app(stage2_settings(tmp_path), providers=[provider])
+
+    outcome = await app.state.search_runner._collect_provider(
+        provider,
+        SearchCriteria("Restaurantes em Campinas", "Restaurantes", "Campinas"),
+    )
+
+    assert len(provider.calls) == 4
+    assert [metric.new_count for metric in outcome.variations] == [1, 0, 0, 1]
+    assert outcome.raw_count == 4
+    assert outcome.rejected_count == 1
+    assert outcome.duplicate_count == 1
+    assert len(outcome.leads) == 2
 
 
 @pytest.mark.asyncio

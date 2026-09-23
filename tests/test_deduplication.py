@@ -169,6 +169,73 @@ def test_website_host_merges_pages_but_shared_host_uses_profile_path() -> None:
     assert len(social_result) == 2
 
 
+def test_same_corporate_domain_does_not_merge_distinct_branches() -> None:
+    branches = [
+        candidate(
+            "REMAX Ponto II",
+            "search",
+            website="https://remax.example/offices/ponto-ii/69052",
+            address="Avenida Nove de Abril, 581",
+            city="Mogi Guaçu",
+        ),
+        candidate(
+            "REMAX Companhia de Imóveis",
+            "search",
+            website="https://remax.example/offices/companhia/69028",
+            address="Rua Treze de Maio, 100",
+            city="Mogi Guaçu",
+        ),
+    ]
+
+    result = deduplicate_companies(branches)
+
+    assert len(result) == 2
+    assert {company.name for company in result} == {
+        "REMAX Ponto II",
+        "REMAX Companhia de Imóveis",
+    }
+
+
+def test_same_domain_contact_page_can_still_merge_with_company_homepage() -> None:
+    observations = [
+        candidate(
+            "Negri Contabilidade e Administração",
+            "search",
+            website="https://negri.example/",
+            city="Mogi Guaçu",
+        ),
+        candidate(
+            "Contato",
+            "search",
+            website="https://negri.example/contato.php",
+            city="Mogi Guaçu",
+        ),
+    ]
+
+    result = deduplicate_companies(observations)
+
+    assert len(result) == 1
+    assert result[0].candidate_count == 2
+    assert result[0].match_reasons == ("website",)
+
+
+def test_large_corporate_domain_keeps_homonymous_branches_separate() -> None:
+    branches = [
+        candidate(
+            "Rede Imobiliária",
+            "search",
+            website=f"https://rede.example/unidades/{index}",
+            address=f"Rua da Unidade, {index}",
+            city="Mogi Guaçu",
+        )
+        for index in range(51)
+    ]
+
+    result = deduplicate_companies(branches)
+
+    assert len(result) == 51
+
+
 def test_name_and_location_match_is_accent_and_state_name_insensitive() -> None:
     observations = [
         candidate(
