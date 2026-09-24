@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import sys
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
-from overturemaps import record_batch_reader
-from overturemaps.core import get_latest_release
 from pydantic import ValidationError
 
 from extrais_leads.core.logging import log_event
+from extrais_leads.core.memory import current_rss_mb
 from extrais_leads.providers.base import (
     ProviderCapabilities,
     ProviderError,
@@ -30,6 +31,21 @@ logger = logging.getLogger(__name__)
 _ATTRIBUTION = "© Overture Maps Foundation and data providers"
 _EXPLORER_URL = "https://explore.overturemaps.org/"
 _CLOSED_STATUSES = frozenset({"permanently_closed", "closed"})
+_WORKER_RESULT_PREFIX = "OVERTURE_RESULT="
+_PLACE_COLUMNS = (
+    "id",
+    "basic_category",
+    "taxonomy",
+    "categories",
+    "confidence",
+    "operating_status",
+    "websites",
+    "socials",
+    "phones",
+    "addresses",
+    "sources",
+    "bbox",
+)
 
 
 class LocationArea(Protocol):
@@ -128,21 +144,29 @@ class OvertureMapsProvider(SearchProvider):
         connect_timeout_seconds: int = 15,
         request_timeout_seconds: int = 45,
         use_stac: bool = False,
-        reader_factory: ReaderFactory = record_batch_reader,
-        release_resolver: ReleaseResolver = get_latest_release,
+        max_concurrent: int = 1,
+        isolate_process: bool = True,
+        reader_factory: ReaderFactory | None = None,
+        release_resolver: ReleaseResolver | None = None,
     ) -> None:
         if not 0 <= min_confidence <= 1:
             raise ValueError("min_confidence must be between zero and one")
         if connect_timeout_seconds <= 0 or request_timeout_seconds <= 0:
             raise ValueError("Overture timeouts must be positive")
+        if max_concurrent < 1:
+            raise ValueError("max_concurrent must be positive")
         self._location_resolver = location_resolver
         self._enabled = enabled
         self._min_confidence = min_confidence
         self._connect_timeout_seconds = connect_timeout_seconds
         self._request_timeout_seconds = request_timeout_seconds
         self._use_stac = use_stac
-        self._reader_factory = reader_factory
-        self._release_resolver = release_resolver
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._reader_factory = reader_factory or _memory_bounded_record_batch_reader
+        self._release_resolver = release_resolver or _get_latest_release
+        self._isolate_process = bool(
+            isolate_process and reader_factory is None and release_resolver is None
+        )
 
     @property
     def configured(self) -> bool:
@@ -168,8 +192,11 @@ class OvertureMapsProvider(SearchProvider):
             return ProviderPage(raw_count=0)
 
         try:
-            area = await self._location_resolver(location)
-            return await asyncio.to_thread(self._search_region, request, category, area)
+            async with self._semaphore:
+                area = await self._location_resolver(location)
+                if self._isolate_process:
+                    return await self._search_isolated(request, area)
+                return await asyncio.to_thread(self._search_region, request, category, area)
         except ProviderError:
             raise
         except TimeoutError as exc:
@@ -182,6 +209,89 @@ class OvertureMapsProvider(SearchProvider):
                 f"Overture regional query failed ({type(exc).__name__})",
                 retryable=True,
             ) from exc
+
+    async def _search_isolated(
+        self,
+        request: ProviderSearchRequest,
+        area: LocationArea,
+    ) -> ProviderPage:
+        payload = {
+            "request": request.model_dump(mode="json"),
+            "area": {
+                "west": area.west,
+                "south": area.south,
+                "east": area.east,
+                "north": area.north,
+                "city": area.city,
+                "state": area.state,
+            },
+            "settings": {
+                "min_confidence": self._min_confidence,
+                "connect_timeout_seconds": self._connect_timeout_seconds,
+                "request_timeout_seconds": self._request_timeout_seconds,
+                "use_stac": self._use_stac,
+            },
+        }
+        parent_rss_before = current_rss_mb()
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "extrais_leads.providers.overture_worker",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await process.communicate(
+                json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            )
+        except asyncio.CancelledError:
+            await _stop_process(process)
+            raise
+        if process.returncode != 0:
+            worker_error = _worker_error_type(stderr)
+            suffix = f" ({worker_error})" if worker_error else ""
+            raise ProviderResponseError(
+                self.name,
+                f"Overture isolated worker failed{suffix}",
+                retryable=True,
+            )
+        result_line = next(
+            (
+                line.removeprefix(_WORKER_RESULT_PREFIX)
+                for line in reversed(stdout.decode("utf-8", errors="replace").splitlines())
+                if line.startswith(_WORKER_RESULT_PREFIX)
+            ),
+            None,
+        )
+        if result_line is None:
+            raise ProviderResponseError(
+                self.name,
+                "Overture isolated worker returned no result",
+                retryable=True,
+            )
+        try:
+            envelope = json.loads(result_line)
+            page = ProviderPage.model_validate(envelope["page"])
+        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+            raise ProviderResponseError(
+                self.name,
+                "Overture isolated worker returned invalid data",
+                retryable=True,
+            ) from exc
+        log_event(
+            logger,
+            "MEMORY",
+            "Pico de memória do worker Overture",
+            stage="overture_worker_end",
+            rss_mb=envelope.get("end_rss_mb"),
+            peak_rss_mb=envelope.get("peak_rss_mb"),
+            estimated_container_peak_mb=_combined_peak(
+                parent_rss_before,
+                envelope.get("peak_rss_mb"),
+            ),
+        )
+        return page
 
     def _search_region(
         self,
@@ -395,6 +505,9 @@ def _taxonomy_values(row: Mapping[str, Any]) -> set[str]:
 
 
 def _primary_name(row: Mapping[str, Any]) -> str | None:
+    projected_name = _text(row.get("name"))
+    if projected_name:
+        return projected_name
     names = row.get("names")
     return _mapping_text(names, "primary") if isinstance(names, Mapping) else None
 
@@ -490,3 +603,92 @@ def _number(value: Any) -> float | None:
     if not isinstance(value, int | float):
         return None
     return float(value)
+
+
+def _memory_bounded_record_batch_reader(
+    overture_type: str,
+    bbox: tuple[float, float, float, float] | None = None,
+    release: str | None = None,
+    connect_timeout: int | None = None,
+    request_timeout: int | None = None,
+    stac: bool = False,
+) -> Iterable[ArrowBatch] | None:
+    """Build the same regional query with a conservative Arrow scanner.
+
+    Overture's default helper reads every place column with threaded readahead.
+    This provider never consumes geometry or the other unused columns, so the
+    projection is lossless for lead normalization while substantially reducing
+    native buffers and Python conversion work.
+    """
+
+    import pyarrow as arrow
+    from overturemaps.core import _prepare_query
+    from pyarrow import dataset as arrow_dataset
+
+    arrow.set_cpu_count(1)
+    arrow.set_io_thread_count(1)
+
+    prepared = _prepare_query(
+        overture_type,
+        bbox,
+        release,
+        connect_timeout,
+        request_timeout,
+        stac,
+    )
+    if prepared is None:
+        return None
+    dataset, filter_expression = prepared
+    available_columns: dict[str, Any] = {
+        column: arrow_dataset.field(column)
+        for column in _PLACE_COLUMNS
+        if column in dataset.schema.names
+    }
+    if "names" in dataset.schema.names:
+        available_columns["name"] = arrow_dataset.field("names", "primary")
+    batches = dataset.to_batches(
+        columns=available_columns,
+        filter=filter_expression,
+        batch_size=1_024,
+        use_threads=False,
+        batch_readahead=0,
+        fragment_readahead=0,
+    )
+    return (batch for batch in batches if batch.num_rows > 0)
+
+
+def _get_latest_release() -> str:
+    from overturemaps.core import get_latest_release
+
+    return get_latest_release()
+
+
+async def _stop_process(process: asyncio.subprocess.Process) -> None:
+    if process.returncode is not None:
+        return
+    process.terminate()
+    try:
+        await asyncio.wait_for(process.wait(), timeout=5)
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+
+
+def _combined_peak(parent_rss: float | None, worker_peak: object) -> float | None:
+    if parent_rss is None or not isinstance(worker_peak, int | float):
+        return None
+    return round(parent_rss + float(worker_peak), 1)
+
+
+def _worker_error_type(stderr: bytes) -> str | None:
+    prefix = "Overture worker failed: "
+    line = next(
+        (
+            item
+            for item in reversed(stderr.decode("utf-8", errors="replace").splitlines())
+            if item.startswith(prefix)
+        ),
+        "",
+    )
+    value = line.removeprefix(prefix)
+    return value if value.isidentifier() else None

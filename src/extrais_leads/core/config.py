@@ -39,11 +39,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     cache_default_ttl_seconds: int = Field(default=86_400, ge=1)
-    cache_max_entries: int = Field(default=10_000, ge=1, le=1_000_000)
+    cache_max_entries: int = Field(default=500, ge=1, le=1_000_000)
+    cache_max_bytes: int = Field(default=33_554_432, ge=1_048_576, le=1_073_741_824)
     search_background_enabled: bool = True
+    search_max_concurrent_runs: int = Field(default=1, ge=1, le=16)
     search_query_variations: int = Field(default=4, ge=1, le=8)
     provider_timeout_seconds: float = Field(default=45.0, gt=0, le=300)
-    provider_max_concurrency: int = Field(default=3, ge=1, le=16)
+    provider_max_concurrency: int = Field(default=1, ge=1, le=16)
     provider_max_retries: int = Field(default=2, ge=0, le=5)
     provider_retry_base_seconds: float = Field(default=1.0, ge=0.1, le=30)
     provider_max_pages: int = Field(default=10, ge=1, le=100)
@@ -58,12 +60,15 @@ class Settings(BaseSettings):
     osm_user_agent: str = "ExtraiLeads/0.5"
     osm_contact_email: str | None = None
     osm_request_interval_seconds: float = Field(default=1.0, ge=1.0, le=30)
+    osm_max_response_bytes: int = Field(default=134_217_728, ge=1_048_576, le=536_870_912)
 
     overture_enabled: bool = True
     overture_min_confidence: float = Field(default=0.2, ge=0, le=1)
     overture_connect_timeout_seconds: int = Field(default=15, ge=1, le=120)
     overture_request_timeout_seconds: int = Field(default=45, ge=1, le=300)
     overture_use_stac: bool = False
+    overture_max_concurrent: int = Field(default=1, ge=1, le=4)
+    overture_isolate_process: bool = True
 
     phone_default_region: Literal["BR"] = "BR"
 
@@ -72,7 +77,7 @@ class Settings(BaseSettings):
     website_enrichment_max_pages_per_site: int = Field(default=3, ge=1, le=5)
     website_enrichment_max_bytes_per_page: int = Field(default=1_000_000, ge=16_384, le=5_000_000)
     website_enrichment_max_redirects: int = Field(default=3, ge=0, le=10)
-    website_enrichment_concurrency: int = Field(default=4, ge=1, le=16)
+    website_enrichment_concurrency: int = Field(default=2, ge=1, le=16)
     website_enrichment_timeout_seconds: float = Field(default=15.0, gt=0, le=60)
     website_enrichment_request_interval_seconds: float = Field(default=0.5, ge=0.1, le=30)
     website_enrichment_cache_ttl_seconds: int = Field(default=604_800, ge=60, le=2_592_000)

@@ -558,7 +558,7 @@ class QualificationService:
             try:
                 await self._cache.set(
                     key,
-                    decision.model_dump(mode="json", by_alias=True),
+                    decision,
                     ttl_seconds=self._cache_ttl_seconds,
                 )
             except Exception:

@@ -337,6 +337,27 @@ async def test_osm_provider_wraps_timeout_as_recoverable_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_osm_provider_rejects_response_above_byte_budget_before_parsing() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"{}",
+            headers={"Content-Length": "1000", "Content-Type": "application/json"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenStreetMapProvider(
+            client=client,
+            max_retries=0,
+            max_response_bytes=100,
+        )
+        with pytest.raises(ProviderResponseError, match="memory safety budget") as caught:
+            await provider.search(ProviderSearchRequest(query="Restaurantes em Campinas"))
+
+    assert caught.value.retryable is False
+
+
+@pytest.mark.asyncio
 async def test_osm_provider_rejects_unsupported_or_incomplete_search_without_network() -> None:
     called = False
 

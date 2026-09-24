@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -321,3 +322,39 @@ async def test_post_endpoint_schedules_background_execution(tmp_path: Path) -> N
 
     assert status["status"] == "completed"
     assert status["companies_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_task_manager_queues_searches_and_runs_only_one_at_a_time() -> None:
+    from extrais_leads.services.search_runner import SearchTaskManager
+
+    release = asyncio.Event()
+
+    class GatedRunner:
+        def __init__(self) -> None:
+            self.active = 0
+            self.maximum_active = 0
+            self.started: list[uuid.UUID] = []
+
+        async def run(self, search_id: uuid.UUID) -> None:
+            self.active += 1
+            self.maximum_active = max(self.maximum_active, self.active)
+            self.started.append(search_id)
+            await release.wait()
+            self.active -= 1
+
+    runner = GatedRunner()
+    manager = SearchTaskManager(runner, max_concurrent_runs=1)  # type: ignore[arg-type]
+    search_ids = [uuid.uuid4() for _ in range(3)]
+    for search_id in search_ids:
+        manager.start(search_id)
+
+    await asyncio.sleep(0)
+    assert runner.started == [search_ids[0]]
+
+    waits = [asyncio.create_task(manager.wait(search_id)) for search_id in search_ids]
+    release.set()
+    await asyncio.gather(*waits)
+
+    assert runner.started == search_ids
+    assert runner.maximum_active == 1

@@ -496,18 +496,20 @@ class WebsiteEnricher:
                 warnings.append(f"Skipped {current}: {exc}")
                 continue
 
-            final_website = fetched.url if not pages else final_website
+            page_url = fetched.url
+            final_website = page_url if not pages else final_website
             parser = _DocumentParser()
             try:
                 parser.feed(fetched.body.decode(fetched.encoding, errors="replace"))
                 parser.close()
             except (AssertionError, ValueError):
-                warnings.append(f"Malformed HTML was partially parsed at {fetched.url}")
+                warnings.append(f"Malformed HTML was partially parsed at {page_url}")
+            del fetched
             stats.pages += 1
             visible_text = _visible_text(parser.text_parts)
-            pages.append((fetched.url, parser, visible_text))
+            pages.append((page_url, parser, visible_text))
 
-            for candidate in _ranked_contact_links(parser.links, fetched.url, scope_host):
+            for candidate in _ranked_contact_links(parser.links, page_url, scope_host):
                 if candidate in visited or candidate in queued:
                     continue
                 if len(queue) >= self._max_pages * 4:

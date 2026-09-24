@@ -49,6 +49,7 @@ def create_app(
     cache = MemoryCache(
         default_ttl_seconds=resolved_settings.cache_default_ttl_seconds,
         max_entries=resolved_settings.cache_max_entries,
+        max_bytes=resolved_settings.cache_max_bytes,
     )
     resolved_providers = providers if providers is not None else _build_providers(resolved_settings)
     enrichment = _build_enrichment(
@@ -68,7 +69,10 @@ def create_app(
         enrichment=enrichment,
         qualification=qualification,
     )
-    task_manager = SearchTaskManager(search_runner)
+    task_manager = SearchTaskManager(
+        search_runner,
+        max_concurrent_runs=resolved_settings.search_max_concurrent_runs,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -137,6 +141,7 @@ def _build_providers(settings: Settings) -> list[SearchProvider]:
         user_agent=settings.osm_user_agent,
         contact_email=settings.osm_contact_email,
         request_interval_seconds=settings.osm_request_interval_seconds,
+        max_response_bytes=settings.osm_max_response_bytes,
         timeout_seconds=settings.provider_timeout_seconds,
         max_retries=0,
     )
@@ -149,6 +154,8 @@ def _build_providers(settings: Settings) -> list[SearchProvider]:
             connect_timeout_seconds=settings.overture_connect_timeout_seconds,
             request_timeout_seconds=settings.overture_request_timeout_seconds,
             use_stac=settings.overture_use_stac,
+            max_concurrent=settings.overture_max_concurrent,
+            isolate_process=settings.overture_isolate_process,
         ),
         TavilyProvider(
             settings.tavily_api_key,

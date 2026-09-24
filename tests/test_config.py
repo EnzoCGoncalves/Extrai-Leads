@@ -12,6 +12,15 @@ def test_settings_have_safe_defaults() -> None:
     assert settings.database_url.startswith("sqlite+aiosqlite:///")
     assert settings.database_auto_create is False
     assert settings.excel_export_batch_size == 500
+    assert settings.search_max_concurrent_runs == 1
+    assert settings.provider_max_concurrency == 1
+    assert settings.overture_max_concurrent == 1
+    assert settings.website_enrichment_concurrency == 2
+    assert settings.cache_max_entries == 500
+    assert settings.cache_max_bytes == 33_554_432
+    assert settings.provider_max_items == 5_000
+    assert settings.search_query_variations == 4
+    assert settings.website_enrichment_max_companies == 250
 
 
 def test_settings_read_environment_and_mask_secrets(monkeypatch: pytest.MonkeyPatch) -> None:

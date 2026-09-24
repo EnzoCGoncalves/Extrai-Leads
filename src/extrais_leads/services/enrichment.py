@@ -93,6 +93,7 @@ class WebsiteEnrichmentCoordinator:
         self._cache_ttl_seconds = cache_ttl_seconds
         self._max_retries = max_retries
         self._retry_base_seconds = retry_base_seconds
+        self._max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
     async def enrich(self, companies: list[ResolvedCompany]) -> WebsiteEnrichmentBatch:
@@ -108,7 +109,7 @@ class WebsiteEnrichmentCoordinator:
 
         limit_reached = len(eligible) > self._max_companies
         selected = eligible[: self._max_companies]
-        results = await asyncio.gather(*(self._enrich_one(company) for company in selected))
+        results = await self._run_workers(selected)
 
         observations: list[CompanyCandidate] = []
         errors: list[str] = []
@@ -131,6 +132,39 @@ class WebsiteEnrichmentCoordinator:
             errors=tuple(errors[:25]),
             limit_reached=limit_reached,
         )
+
+    async def _run_workers(
+        self, companies: list[ResolvedCompany]
+    ) -> list[tuple[ResolvedCompany, WebsiteEnrichmentResult | None, str | None]]:
+        if not companies:
+            return []
+        queue: asyncio.Queue[tuple[int, ResolvedCompany]] = asyncio.Queue()
+        for index, company in enumerate(companies):
+            queue.put_nowait((index, company))
+        results: list[tuple[ResolvedCompany, WebsiteEnrichmentResult | None, str | None] | None] = [
+            None
+        ] * len(companies)
+
+        async def worker() -> None:
+            while True:
+                try:
+                    index, company = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+                try:
+                    results[index] = await self._enrich_one(company)
+                finally:
+                    queue.task_done()
+
+        workers = [
+            asyncio.create_task(worker(), name=f"website-enrichment-{index + 1}")
+            for index in range(min(self._max_concurrency, len(companies)))
+        ]
+        await asyncio.gather(*workers)
+        completed = [result for result in results if result is not None]
+        if len(completed) != len(companies):  # pragma: no cover - worker invariant
+            raise RuntimeError("website enrichment worker did not produce every result")
+        return completed
 
     async def _enrich_one(
         self, company: ResolvedCompany
@@ -184,7 +218,7 @@ class WebsiteEnrichmentCoordinator:
         try:
             await self._cache.set(
                 key,
-                result.model_dump(mode="json"),
+                result,
                 ttl_seconds=self._cache_ttl_seconds,
             )
         except Exception:

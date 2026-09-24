@@ -221,24 +221,30 @@ DATABASE_URL=postgresql+asyncpg://usuario:senha@host/banco
 | Variável | Padrão | Finalidade |
 |---|---:|---|
 | `SEARCH_BACKGROUND_ENABLED` | `true` | inicia a pesquisa após o POST |
+| `SEARCH_MAX_CONCURRENT_RUNS` | `1` | pesquisas completas simultâneas; as demais aguardam na fila |
 | `SEARCH_QUERY_VARIATIONS` | `4` | consultas complementares Tavily, máximo 8 |
 | `PROVIDER_TIMEOUT_SECONDS` | `45` | timeout externo por tentativa |
 | `PROVIDER_MAX_RETRIES` | `2` | retries de falhas transitórias |
-| `PROVIDER_MAX_CONCURRENCY` | `3` | providers simultâneos por processo |
+| `PROVIDER_MAX_CONCURRENCY` | `1` | providers simultâneos por processo no perfil de 512 MB |
 | `PROVIDER_MAX_PAGES` | `10` | trava de segurança para providers paginados |
 | `PROVIDER_MAX_ITEMS` | `5000` | proteção de memória, não limite da query OSM |
 | `CACHE_DEFAULT_TTL_SECONDS` | `86400` | validade de resultados externos idênticos |
+| `CACHE_MAX_ENTRIES` | `500` | máximo de entradas no cache local LRU/TTL |
+| `CACHE_MAX_BYTES` | `33554432` | orçamento prioritário de aproximadamente 32 MB do cache |
 | `OSM_ENABLED` | `true` | ativa OpenStreetMap |
 | `OSM_REQUEST_INTERVAL_SECONDS` | `1` | intervalo obrigatório do Nominatim público |
+| `OSM_MAX_RESPONSE_BYTES` | `134217728` | trava defensiva de 128 MB por resposta, sem limitar a contagem de elementos |
 | `OVERTURE_ENABLED` | `true` | ativa Overture Maps Places regional |
 | `OVERTURE_MIN_CONFIDENCE` | `0.2` | piso de confiança contra registros suspeitos |
 | `OVERTURE_USE_STAC` | `false` | usa índice STAC quando a release cobrir corretamente a região |
+| `OVERTURE_MAX_CONCURRENT` | `1` | scans Arrow simultâneos por processo |
+| `OVERTURE_ISOLATE_PROCESS` | `true` | libera buffers nativos ao encerrar o worker regional |
 | `TAVILY_API_KEY` | vazio | ativa Tavily quando configurada |
 | `WEBSITE_ENRICHMENT_ENABLED` | `true` | ativa enriquecimento limitado do site oficial |
 | `WEBSITE_ENRICHMENT_MAX_COMPANIES` | `250` | orçamento de sites por pesquisa |
 | `WEBSITE_ENRICHMENT_MAX_PAGES_PER_SITE` | `3` | páginas públicas por domínio |
 | `WEBSITE_ENRICHMENT_MAX_BYTES_PER_PAGE` | `1000000` | limite de bytes de cada HTML |
-| `WEBSITE_ENRICHMENT_CONCURRENCY` | `4` | sites enriquecidos simultaneamente |
+| `WEBSITE_ENRICHMENT_CONCURRENCY` | `2` | workers fixos; todas as empresas elegíveis continuam na fila |
 | `AI_QUALIFICATION_ENABLED` | `true` | permite Gemini somente com chave configurada |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | modelo estável de classificação |
 | `GEMINI_MAX_QUALIFICATIONS_PER_SEARCH` | `25` | empresas ambíguas enviadas à IA |
@@ -259,6 +265,13 @@ uv run uvicorn extrais_leads.main:app --reload
 - API: `http://127.0.0.1:8000`;
 - health check: `http://127.0.0.1:8000/health`;
 - OpenAPI: `http://127.0.0.1:8000/docs`.
+
+No Render, use apenas um processo para que o limite global de pesquisas e o orçamento de RAM
+sejam efetivos em toda a instância:
+
+```sh
+uv run uvicorn extrais_leads.main:app --host 0.0.0.0 --port $PORT --workers 1
+```
 
 ### Frontend
 

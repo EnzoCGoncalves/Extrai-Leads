@@ -7,6 +7,7 @@ POIs are then collected from Overpass without a provider-side result cap.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -162,6 +163,7 @@ class OpenStreetMapProvider(SearchProvider):
         user_agent: str = "ExtraiLeads/0.3",
         contact_email: str | None = None,
         request_interval_seconds: float = 1.0,
+        max_response_bytes: int = 134_217_728,
         timeout_seconds: float = 30.0,
         overpass_query_timeout_seconds: int = 25,
         max_retries: int = 1,
@@ -177,6 +179,8 @@ class OpenStreetMapProvider(SearchProvider):
             raise ValueError("Nominatim request interval must be at least one second")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if max_response_bytes < 1:
+            raise ValueError("max_response_bytes must be positive")
         if not 1 <= overpass_query_timeout_seconds <= 180:
             raise ValueError("overpass_query_timeout_seconds must be between 1 and 180")
         if max_retries < 0:
@@ -194,6 +198,7 @@ class OpenStreetMapProvider(SearchProvider):
         self._user_agent = self._contact_user_agent(user_agent.strip(), contact_email)
         self._contact_email = contact_email.strip() if contact_email else None
         self._timeout = httpx.Timeout(timeout_seconds)
+        self._max_response_bytes = max_response_bytes
         self._overpass_query_timeout_seconds = overpass_query_timeout_seconds
         self._max_retries = max_retries
         self._retry_base_delay_seconds = retry_base_delay_seconds
@@ -344,15 +349,15 @@ class OpenStreetMapProvider(SearchProvider):
             if before_attempt is not None:
                 await before_attempt()
             try:
-                response = await client.request(
+                request = client.build_request(
                     method,
                     url,
                     params=params,
                     data=data,
                     headers=headers,
                     timeout=self._timeout,
-                    follow_redirects=True,
                 )
+                response = await client.send(request, stream=True, follow_redirects=True)
             except httpx.TimeoutException as exc:
                 if attempt >= self._max_retries:
                     raise ProviderResponseError(
@@ -372,41 +377,68 @@ class OpenStreetMapProvider(SearchProvider):
                 await self._wait_before_retry(service, attempt, None)
                 continue
 
-            if response.status_code in _RETRYABLE_STATUS_CODES:
-                retry_after = self._retry_after_seconds(response)
-                can_wait = retry_after is None or retry_after <= self._max_retry_after_seconds
-                if attempt < self._max_retries and can_wait:
-                    await self._wait_before_retry(service, attempt, retry_after)
-                    continue
-                if response.status_code == 429:
-                    raise ProviderRateLimitError(
+            try:
+                if response.status_code in _RETRYABLE_STATUS_CODES:
+                    retry_after = self._retry_after_seconds(response)
+                    can_wait = retry_after is None or retry_after <= self._max_retry_after_seconds
+                    if attempt < self._max_retries and can_wait:
+                        await self._wait_before_retry(service, attempt, retry_after)
+                        continue
+                    if response.status_code == 429:
+                        raise ProviderRateLimitError(
+                            self.name,
+                            f"{service} rate limit reached",
+                            retry_after=retry_after,
+                        )
+                    raise ProviderResponseError(
                         self.name,
-                        f"{service} rate limit reached",
+                        f"{service} temporarily unavailable (HTTP {response.status_code})",
+                        retryable=True,
                         retry_after=retry_after,
                     )
-                raise ProviderResponseError(
-                    self.name,
-                    f"{service} temporarily unavailable (HTTP {response.status_code})",
-                    retryable=True,
-                    retry_after=retry_after,
-                )
 
-            if response.is_error:
-                raise ProviderResponseError(
-                    self.name,
-                    f"{service} rejected the request (HTTP {response.status_code})",
-                    retryable=False,
-                )
-            try:
-                return response.json()
-            except ValueError as exc:
-                raise ProviderResponseError(
-                    self.name,
-                    f"{service} returned invalid JSON",
-                    retryable=False,
-                ) from exc
+                if response.is_error:
+                    raise ProviderResponseError(
+                        self.name,
+                        f"{service} rejected the request (HTTP {response.status_code})",
+                        retryable=False,
+                    )
+                return await self._read_json_response(response, service)
+            finally:
+                await response.aclose()
 
         raise AssertionError("retry loop exited unexpectedly")
+
+    async def _read_json_response(self, response: httpx.Response, service: str) -> Any:
+        content_length = response.headers.get("Content-Length")
+        if content_length:
+            try:
+                declared_size = int(content_length)
+            except ValueError:
+                declared_size = 0
+            if declared_size > self._max_response_bytes:
+                raise ProviderResponseError(
+                    self.name,
+                    f"{service} response exceeds the memory safety budget",
+                    retryable=False,
+                )
+        body = bytearray()
+        try:
+            async for chunk in response.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > self._max_response_bytes:
+                    raise ProviderResponseError(
+                        self.name,
+                        f"{service} response exceeds the memory safety budget",
+                        retryable=False,
+                    )
+            return json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ProviderResponseError(
+                self.name,
+                f"{service} returned invalid JSON",
+                retryable=False,
+            ) from exc
 
     async def _wait_before_retry(
         self,

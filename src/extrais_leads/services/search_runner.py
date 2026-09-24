@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from extrais_leads.cache import CacheBackend
 from extrais_leads.core.config import Settings
 from extrais_leads.core.logging import log_event
+from extrais_leads.core.memory import log_memory
 from extrais_leads.db import Database
 from extrais_leads.models import Search, SearchProviderRun, Source
 from extrais_leads.models.base import utc_now
@@ -105,6 +106,7 @@ class SearchRunner:
             criteria = await self._initialize(search_id)
             if criteria is None:
                 return
+            log_memory(logger, "search_start", search_id=search_id)
             configured = [provider for provider in self._providers if provider.configured]
             if not configured:
                 await self._finish_without_provider(search_id)
@@ -118,6 +120,12 @@ class SearchRunner:
             observations = [lead for outcome in outcomes for lead in outcome.leads]
             await self._set_stage(search_id, SearchStage.ENRICHING, 65)
             initial_resolved = deduplicate_companies(observations)
+            log_memory(
+                logger,
+                "dedup_end",
+                search_id=search_id,
+                companies=len(initial_resolved),
+            )
             for outcome in outcomes:
                 final_results = sum(
                     any(source.provider == outcome.provider for source in company.sources)
@@ -155,6 +163,12 @@ class SearchRunner:
             if self._enrichment is not None and initial_resolved:
                 enrichment = await self._enrichment.enrich(initial_resolved)
                 observations.extend(enrichment.observations)
+            log_memory(
+                logger,
+                "enrichment_end",
+                search_id=search_id,
+                enriched=enrichment.enriched_count,
+            )
 
             await self._set_stage(search_id, SearchStage.DEDUPLICATING, 78)
             resolved = deduplicate_companies(observations)
@@ -166,6 +180,12 @@ class SearchRunner:
                 processed.append(normalized)
                 contacts.append(contact)
             qualification = await self._qualification.qualify_many(criteria.category, processed)
+            log_memory(
+                logger,
+                "before_persistence",
+                search_id=search_id,
+                companies=len(processed),
+            )
             await self._persist_and_finalize(
                 search_id,
                 processed,
@@ -180,6 +200,8 @@ class SearchRunner:
         except Exception:
             logger.exception("Unhandled search runner failure", extra={"search_id": str(search_id)})
             await self._mark_failed(search_id, "Internal search processing error")
+        finally:
+            log_memory(logger, "search_end", search_id=search_id)
 
     async def recover_interrupted(self) -> int:
         """Close searches left running after an unclean process interruption."""
@@ -277,7 +299,15 @@ class SearchRunner:
         self, provider: SearchProvider, criteria: SearchCriteria
     ) -> ProviderOutcome:
         async with self._semaphore:
-            return await self._collect_provider(provider, criteria)
+            if provider.name == "overture":
+                log_memory(logger, "overture_start", provider=provider.name)
+            try:
+                return await self._collect_provider(provider, criteria)
+            finally:
+                if provider.name == "overture":
+                    log_memory(logger, "overture_end", provider=provider.name)
+                elif provider.name == "openstreetmap":
+                    log_memory(logger, "osm_end", provider=provider.name)
 
     async def _collect_provider(
         self, provider: SearchProvider, criteria: SearchCriteria
@@ -439,7 +469,7 @@ class SearchRunner:
             return ProviderPage.model_validate(cached)
 
         page = await self._call_with_retry(provider, request)
-        await self._cache.set(cache_key, page.model_dump(mode="json"))
+        await self._cache.set(cache_key, page)
         return page
 
     async def _call_with_retry(
@@ -678,16 +708,25 @@ class SearchRunner:
 class SearchTaskManager:
     """Own background task references and shut them down predictably."""
 
-    def __init__(self, runner: SearchRunner, *, shutdown_timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        runner: SearchRunner,
+        *,
+        max_concurrent_runs: int = 1,
+        shutdown_timeout: float = 10.0,
+    ) -> None:
+        if max_concurrent_runs < 1:
+            raise ValueError("max_concurrent_runs must be positive")
         self._runner = runner
         self._shutdown_timeout = shutdown_timeout
+        self._run_semaphore = asyncio.Semaphore(max_concurrent_runs)
         self._tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
 
     def start(self, search_id: uuid.UUID) -> None:
         existing = self._tasks.get(search_id)
         if existing and not existing.done():
             return
-        task = asyncio.create_task(self._runner.run(search_id), name=f"search-{search_id}")
+        task = asyncio.create_task(self._run_queued(search_id), name=f"search-{search_id}")
         self._tasks[search_id] = task
         task.add_done_callback(lambda completed: self._on_done(search_id, completed))
 
@@ -705,6 +744,10 @@ class SearchTaskManager:
             task.cancel()
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
+
+    async def _run_queued(self, search_id: uuid.UUID) -> None:
+        async with self._run_semaphore:
+            await self._runner.run(search_id)
 
     def _on_done(self, search_id: uuid.UUID, task: asyncio.Task[None]) -> None:
         self._tasks.pop(search_id, None)

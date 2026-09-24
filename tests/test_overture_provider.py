@@ -1,3 +1,6 @@
+import asyncio
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -8,6 +11,7 @@ from extrais_leads.core.config import Settings
 from extrais_leads.providers import (
     OvertureMapsProvider,
     ProviderError,
+    ProviderPage,
     ProviderResponseError,
     ProviderSearchRequest,
 )
@@ -275,3 +279,32 @@ def test_application_builds_overture_with_the_shared_osm_location_resolver() -> 
         "tavily",
     ]
     assert providers[1]._location_resolver.__self__ is providers[0]
+
+
+@pytest.mark.asyncio
+async def test_overture_limits_concurrent_regional_scans_to_one() -> None:
+    provider, _calls = build_provider([])
+    active = 0
+    maximum_active = 0
+    lock = threading.Lock()
+
+    def slow_search(*_args: Any) -> ProviderPage:
+        nonlocal active, maximum_active
+        with lock:
+            active += 1
+            maximum_active = max(maximum_active, active)
+        time.sleep(0.03)
+        with lock:
+            active -= 1
+        return ProviderPage(raw_count=0)
+
+    provider._search_region = slow_search  # type: ignore[method-assign]
+    request = ProviderSearchRequest(
+        query="Imobiliárias em Mogi Guaçu",
+        category="Imobiliárias",
+        location="Mogi Guaçu",
+    )
+
+    await asyncio.gather(provider.search(request), provider.search(request))
+
+    assert maximum_active == 1
